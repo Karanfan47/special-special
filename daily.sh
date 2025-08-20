@@ -8,7 +8,7 @@ else
     USER_HOME="$HOME"
     RUN_AS_USER="$USER"
 fi
-#AAAAAAAAAAAAAAAA
+
 # Cleanup temporary files
 cleanup() {
     rm -f "$USER_HOME"/list.txt "$USER_HOME"/video_*.mp4 "$USER_HOME"/pix_*.mp4 "$USER_HOME"/pex_*.mp4 2>/dev/null
@@ -18,10 +18,10 @@ cleanup() {
 setup_venv() {
     VENV_DIR="$USER_HOME/pipe_venv"
     if [ ! -d "$VENV_DIR" ]; then
-        python3 -m venv "$VENV_DIR"
-        source "$VENV_DIR/bin/activate"
-        pip install --upgrade pip
-        pip install yt-dlp requests moviepy
+        python3 -m venv "$VENV_DIR" || { echo "Failed to create virtual environment"; exit 1; }
+        source "$VENV_DIR/bin/activate" || { echo "Failed to activate virtual environment"; exit 1; }
+        pip install --upgrade pip || { echo "Failed to upgrade pip"; exit 1; }
+        pip install yt-dlp requests moviepy || { echo "Failed to install Python packages"; exit 1; }
         deactivate
     fi
     chown -R "$RUN_AS_USER:$RUN_AS_USER" "$VENV_DIR"
@@ -462,18 +462,16 @@ INNER_EOF
 
 # Upload videos function
 upload_videos() {
-    setup_venv
+    setup_venv || { echo "Failed to setup virtual environment"; exit 1; }
     VENV_DIR="$USER_HOME/pipe_venv"
-    source "$VENV_DIR/bin/activate"
+    source "$VENV_DIR/bin/activate" || { echo "Failed to activate virtual environment"; exit 1; }
     echo 'pexels: iur1f5KGwvSIR1xr8I1t3KR3NP88wFXeCyV12ibHnioNXQYTy95KhE69' > "$USER_HOME/.pexels_api_key"
     echo '51848865-07253475f9fc0309b02c38a39' > "$USER_HOME/.pixabay_api_key"
     chown "$RUN_AS_USER:$RUN_AS_USER" "$USER_HOME/.pexels_api_key" "$USER_HOME/.pixabay_api_key"
-    num_uploads=$((RANDOM % 2 + 1))  # 1 or 2 uploads
+    num_uploads=$((RANDOM % 2 + 1))
     queries=(
         "nature scenery" "space galaxy" "ocean waves" "city night" "forest walk"
         "desert sunset" "mountain hike" "rainfall" "wild animals" "aurora borealis"
-        "abstract art" "waterfall" "travel vlog" "street food" "night lights"
-        "sunrise timelapse" "stars sky" "fireworks" "birds flying" "landscape view"
     )
 
     for ((i=1; i<=num_uploads; i++)); do
@@ -496,21 +494,19 @@ upload_videos() {
             fi
             if $download_success; then
                 setup_pipe_path
-                pipe upload-file "$output_file" "$output_file"
-                if [ $? -eq 0 ]; then
-                    link_output=$(pipe create-public-link "$output_file")
-                    direct_link=$(echo "$link_output" | grep "Direct link" -A 1 | tail -n 1 | awk '{$1=$1};1')
-                    social_link=$(echo "$link_output" | grep "Social media link" -A 1 | tail -n 1 | awk '{$1=$1};1')
-                    file_id=$(echo "$link_output" | grep "File ID (Blake3)" | awk '{print $NF}')
-                    if [ -n "$file_id" ]; then
-                        if [ ! -f "$USER_HOME/file_details.json" ]; then
-                            echo '[]' > "$USER_HOME/file_details.json"
-                        fi
-                        jq --arg fn "$output_file" --arg fid "$file_id" --arg dl "$direct_link" --arg sl "$social_link" \
-                            '. + [{"file_name": $fn, "file_id": $fid, "direct_link": $dl, "social_link": $sl}]' \
-                            "$USER_HOME/file_details.json" > "$USER_HOME/tmp.json" && mv "$USER_HOME/tmp.json" "$USER_HOME/file_details.json"
-                        success=true
+                pipe upload-file "$output_file" "$output_file" || { echo "Failed to upload file"; rm -f "$output_file"; continue; }
+                link_output=$(pipe create-public-link "$output_file") || { echo "Failed to create public link"; rm -f "$output_file"; continue; }
+                direct_link=$(echo "$link_output" | grep "Direct link" -A 1 | tail -n 1 | awk '{$1=$1};1')
+                social_link=$(echo "$link_output" | grep "Social media link" -A 1 | tail -n 1 | awk '{$1=$1};1')
+                file_id=$(echo "$link_output" | grep "File ID (Blake3)" | awk '{print $NF}')
+                if [ -n "$file_id" ]; then
+                    if [ ! -f "$USER_HOME/file_details.json" ]; then
+                        echo '[]' > "$USER_HOME/file_details.json"
                     fi
+                    jq --arg fn "$output_file" --arg fid "$file_id" --arg dl "$direct_link" --arg sl "$social_link" \
+                        '. + [{"file_name": $fn, "file_id": $fid, "direct_link": $dl, "social_link": $sl}]' \
+                        "$USER_HOME/file_details.json" > "$USER_HOME/tmp.json" && mv "$USER_HOME/tmp.json" "$USER_HOME/file_details.json"
+                    success=true
                 fi
                 rm -f "$output_file"
             else
@@ -556,10 +552,10 @@ EOF
 
 # Main execution
 if [ "$1" == "--run" ]; then
-    setup_downloaders
+    setup_downloaders || { echo "Failed to setup downloaders"; exit 1; }
     while true; do
         upload_videos
-        sleep_time=$((RANDOM % (12*3600) + 12*3600))  # 12-24 hours
+        sleep_time=$((RANDOM % (12*3600) + 12*3600))
         sleep $sleep_time
     done
 else
