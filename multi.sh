@@ -288,7 +288,7 @@ if __name__ == "__main__":
 EOF
     chmod +x solana_airdrop.py
     retries=0
-    max_retries=5
+    max_retries=10
     while [ $retries -lt $max_retries ]; do
         attempt=$((retries+1))
         echo -e "${BLUE}💰 Attempting to claim 5 Devnet SOL (Attempt ${attempt}/${max_retries})...${NC}"
