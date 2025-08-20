@@ -16,22 +16,30 @@ else
     NC=""
     BOLD=""
 fi
-
+#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 # Ensure script runs with sudo
 if [ "$EUID" -ne 0 ]; then
     echo "${RED}${BOLD}❌ This script requires root privileges. Please run with sudo.${NC}"
     exit 1
 fi
 
+# Get the home directory of the user who invoked sudo
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+    echo "${RED}${BOLD}❌ SUDO_USER not set. Please run with sudo.${NC}"
+    exit 1
+fi
+
 # Cleanup temporary files
 cleanup() {
     echo "${BLUE}${BOLD}🧹 Cleaning up temporary files...${NC}"
-    rm -f list.txt video_*.mp4 pix_*.mp4 pex_*.mp4 2>/dev/null
+    rm -f "$USER_HOME"/list.txt "$USER_HOME"/video_*.mp4 "$USER_HOME"/pix_*.mp4 "$USER_HOME"/pex_*.mp4 2>/dev/null
 }
 
 # Setup Python virtual environment if not exists
 setup_venv() {
-    VENV_DIR="$HOME/pipe_venv"
+    VENV_DIR="$USER_HOME/pipe_venv"
     if [ ! -d "$VENV_DIR" ]; then
         echo "${BLUE}${BOLD}🛠️ Setting up Python virtual environment at $VENV_DIR...${NC}"
         python3 -m venv "$VENV_DIR"
@@ -40,20 +48,21 @@ setup_venv() {
         pip install yt-dlp requests moviepy
         deactivate
     fi
+    chown -R "$SUDO_USER:$SUDO_USER" "$VENV_DIR"
 }
 
 # Setup pipe path if needed
 setup_pipe_path() {
-    export PATH=$HOME/.cargo/bin:$PATH
-    if [ -f "$HOME/.cargo/env" ]; then
-        source "$HOME/.cargo/env"
+    export PATH="$USER_HOME/.cargo/bin:$PATH"
+    if [ -f "$USER_HOME/.cargo/env" ]; then
+        source "$USER_HOME/.cargo/env"
     fi
 }
 
 # Create downloader scripts
 setup_downloaders() {
     echo "${BLUE}${BOLD}📝 Creating downloader scripts...${NC}"
-    cat > "$HOME/video_downloader.py" << 'INNER_EOF'
+    cat > "$USER_HOME/video_downloader.py" << 'INNER_EOF'
 import yt_dlp
 import os
 import sys
@@ -213,8 +222,9 @@ if __name__ == "__main__":
     else:
         print("Please provide a search query and output filename.")
 INNER_EOF
+    chown "$SUDO_USER:$SUDO_USER" "$USER_HOME/video_downloader.py"
 
-    cat > "$HOME/pixabay_downloader.py" << 'INNER_EOF'
+    cat > "$USER_HOME/pixabay_downloader.py" << 'INNER_EOF'
 import requests
 import os
 import sys
@@ -376,8 +386,9 @@ if __name__ == "__main__":
     else:
         print("Please provide a search query and output filename.")
 INNER_EOF
+    chown "$SUDO_USER:$SUDO_USER" "$USER_HOME/pixabay_downloader.py"
 
-    cat > "$HOME/pexels_downloader.py" << 'INNER_EOF'
+    cat > "$USER_HOME/pexels_downloader.py" << 'INNER_EOF'
 import requests
 import os
 import sys
@@ -545,15 +556,17 @@ if __name__ == "__main__":
     else:
         print("Please provide a search query and output filename.")
 INNER_EOF
+    chown "$SUDO_USER:$SUDO_USER" "$USER_HOME/pexels_downloader.py"
 }
 
 # Upload videos function
 upload_videos() {
     setup_venv
-    VENV_DIR="$HOME/pipe_venv"
+    VENV_DIR="$USER_HOME/pipe_venv"
     source "$VENV_DIR/bin/activate"
-    echo 'pexels: iur1f5KGwvSIR1xr8I1t3KR3NP88wFXeCyV12ibHnioNXQYTy95KhE69' > "$HOME/.pexels_api_key"
-    echo '51848865-07253475f9fc0309b02c38a39' > "$HOME/.pixabay_api_key"
+    echo 'pexels: iur1f5KGwvSIR1xr8I1t3KR3NP88wFXeCyV12ibHnioNXQYTy95KhE69' > "$USER_HOME/.pexels_api_key"
+    echo '51848865-07253475f9fc0309b02c38a39' > "$USER_HOME/.pixabay_api_key"
+    chown "$SUDO_USER:$SUDO_USER" "$USER_HOME/.pexels_api_key" "$USER_HOME/.pixabay_api_key"
     num_uploads=$((RANDOM % 3 + 5))
     echo "${GREEN}${BOLD}📦 Number of uploads set to: $num_uploads${NC}"
 
@@ -589,14 +602,14 @@ upload_videos() {
         for source in "${sources[@]}"; do
             echo "${YELLOW}${BOLD}🔍 Trying $source with query '$query'...${NC}"
             random_suffix=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
-            output_file="video_$random_suffix.mp4"
+            output_file="$USER_HOME/video_$random_suffix.mp4"
             download_success=false
             if [ "$source" = "youtube" ]; then
-                python3 "$HOME/video_downloader.py" "$query" "$output_file" 2>&1
+                python3 "$USER_HOME/video_downloader.py" "$query" "$output_file" 2>&1
             elif [ "$source" = "pixabay" ]; then
-                python3 "$HOME/pixabay_downloader.py" "$query" "$output_file" 2>&1
+                python3 "$USER_HOME/pixabay_downloader.py" "$query" "$output_file" 2>&1
             elif [ "$source" = "pexels" ]; then
-                python3 "$HOME/pexels_downloader.py" "$query" "$output_file" 2>&1
+                python3 "$USER_HOME/pexels_downloader.py" "$query" "$output_file" 2>&1
             fi
             if [ -f "$output_file" ] && [ $(stat -f%z "$output_file" 2>/dev/null || stat -c%s "$output_file" 2>/dev/null) -gt 50000000 ]; then
                 download_success=true
@@ -613,12 +626,12 @@ upload_videos() {
                     direct_link=$(echo "$link_output" | grep "Direct link" -A 1 | tail -n 1 | awk '{$1=$1};1')
                     social_link=$(echo "$link_output" | grep "Social media link" -A 1 | tail -n 1 | awk '{$1=$1};1')
                     if [ -n "$file_id" ]; then
-                        if [ ! -f "file_details.json" ]; then
-                            echo '[]' > file_details.json
+                        if [ ! -f "$USER_HOME/file_details.json" ]; then
+                            echo '[]' > "$USER_HOME/file_details.json"
                         fi
                         jq --arg fn "$output_file" --arg fid "$file_id" --arg dl "$direct_link" --arg sl "$social_link" \
                             '. + [{"file_name": $fn, "file_id": $fid, "direct_link": $dl, "social_link": $sl}]' \
-                            file_details.json > tmp.json && mv tmp.json file_details.json
+                            "$USER_HOME/file_details.json" > "$USER_HOME/tmp.json" && mv "$USER_HOME/tmp.json" "$USER_HOME/file_details.json"
                         if [ $? -eq 0 ]; then
                             echo "${GREEN}${BOLD}✅ Upload $i successful from $source.${NC}"
                             success=true
@@ -652,7 +665,6 @@ upload_videos() {
 setup_systemd_service() {
     echo "${BLUE}${BOLD}⚙️ Setting up systemd service...${NC}"
     SERVICE_FILE="/etc/systemd/system/pipe-uploader.service"
-    USER=$(logname)
     cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=Pipe Video Uploader Continuous Service
@@ -660,9 +672,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=$USER
-ExecStart=/bin/bash $HOME/pipe-uploader.sh --run
-WorkingDirectory=$HOME
+User=$SUDO_USER
+ExecStart=/bin/bash $USER_HOME/pipe-uploader.sh --run
+WorkingDirectory=$USER_HOME
 Restart=always
 RestartSec=10
 
@@ -689,6 +701,10 @@ if [ "$1" == "--run" ]; then
         sleep $sleep_time
     done
 else
+    # Ensure the script itself is in the user's home directory
+    mv "$0" "$USER_HOME/pipe-uploader.sh"
+    chown "$SUDO_USER:$SUDO_USER" "$USER_HOME/pipe-uploader.sh"
+    chmod +x "$USER_HOME/pipe-uploader.sh"
     setup_downloaders
     setup_systemd_service
 fi
