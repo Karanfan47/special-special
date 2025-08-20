@@ -219,7 +219,7 @@ create_user_and_setup() {
     else
         echo -e "${RED}❌ Failed to back up Solana Public Key.${NC}"
     fi
-    referral_code="ITZMEAAS-PFJU"
+    referral_code="AABIDYK-4PUK"
     echo -e "${YELLOW}🔗 Using referral code: $referral_code${NC}"
     echo -e "${BLUE}✅ Applying referral code...${NC}"
     pipe referral apply "$referral_code" || echo -e "${RED}❌ Failed to apply referral code.${NC}"
