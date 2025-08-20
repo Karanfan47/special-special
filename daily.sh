@@ -18,7 +18,7 @@ else
 fi
 
 CTRL_C_COUNT=0
-
+#AAAAAAAAAAAAAAAAAAAA
 # Trap Ctrl+C
 trap 'handle_ctrl_c' SIGINT
 
@@ -92,7 +92,53 @@ setup_venv() {
     deactivate
 }
 
-# Setup pipe path and handle 'pipe not found'
+# Install pipe node if not found
+install_pipe() {
+    echo -e "${BLUE}🔍 Checking if Pipe is installed...${NC}"
+    if command -v pipe >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Pipe is already installed!${NC}"
+        return 0
+    fi
+
+    echo -e "${BLUE}🔄 Installing dependencies for Pipe...${NC}"
+    sudo apt update && sudo apt install -y curl build-essential git wget lz4 jq make gcc libgbm1 pkg-config libssl-dev tar clang bsdmainutils unzip libleveldb-dev libclang-dev ninja-build
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to install dependencies!${NC}"
+        exit 1
+    fi
+
+    echo -e "${BLUE}🦀 Installing Rust...${NC}"
+    curl https://sh.rustup.rs -sSf | sh -s -- -y
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to install Rust!${NC}"
+        exit 1
+    fi
+    source "$HOME/.cargo/env"
+
+    echo -e "${BLUE}📥 Cloning and installing Pipe...${NC}"
+    git clone https://github.com/PipeNetwork/pipe.git "$HOME/pipe"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to clone Pipe repository!${NC}"
+        exit 1
+    fi
+
+    cd "$HOME/pipe"
+    cargo install --path .
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to install Pipe!${NC}"
+        exit 1
+    fi
+    cd "$HOME"
+
+    setup_pipe_path
+    if ! command -v pipe >/dev/null 2>&1; then
+        echo -e "${RED}❌ Pipe installation failed! Checking PATH: $PATH${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Pipe installed successfully!${NC}"
+}
+
+# Setup pipe path
 setup_pipe_path() {
     if [ -f "$HOME/.cargo/bin/pipe" ]; then
         if ! grep -q "export PATH=\$HOME/.cargo/bin:\$PATH" ~/.bashrc; then
@@ -108,7 +154,8 @@ setup_pipe_path() {
         chmod +x "$HOME/.cargo/bin/pipe"
         echo -e "${GREEN}✅ Ensured pipe is executable.${NC}"
     else
-        echo -e "${YELLOW}⚠️ Pipe binary not found. Assuming it's installed; if not, install manually.${NC}"
+        echo -e "${YELLOW}⚠️ Pipe binary not found. Triggering installation...${NC}"
+        install_pipe
     fi
 }
 
@@ -135,7 +182,7 @@ check_dependencies() {
     fi
 }
 
-# Upload videos (modified for 5-7 daily uploads with random sleeps and error handling)
+# Upload videos
 upload_videos() {
     VENV_DIR="$HOME/pipe_venv"
     if [ ! -d "$VENV_DIR" ]; then
@@ -149,7 +196,7 @@ upload_videos() {
 
     source "$VENV_DIR/bin/activate"
 
-    # Set API keys (assuming they are set; if not, create files)
+    # Set API keys
     if [ ! -f "$HOME/.pexels_api_key" ]; then
         echo "pexels: iur1f5KGwvSIR1xr8I1t3KR3NP88wFXeCyV12ibHnioNXQYTy95KhE69" > "$HOME/.pexels_api_key"
     fi
@@ -275,7 +322,7 @@ upload_videos() {
         fi
 
         log_file="upload_logs/upload_$(date +%Y%m%d_%H%M%S).log"
-        echo -e "${BLUE}📹 Starting upload $i/$num_uploads...${NC}" | tee -a "$log_file"
+        echo -e "${BLUE}📹 Starting upload $i/$num_Uploads...${NC}" | tee -a "$log_file"
 
         query=${queries[$RANDOM % ${#queries[@]}]}
         echo -e "${YELLOW}🔍 Using query: \"$query\"${NC}" | tee -a "$log_file"
@@ -306,10 +353,10 @@ upload_videos() {
 
                 # Handle pipe command not found
                 if ! command -v pipe >/dev/null 2>&1; then
-                    echo -e "${YELLOW}⚠️ Pipe command not found. Setting up path...${NC}" | tee -a "$log_file"
-                    setup_pipe_path
+                    echo -e "${YELLOW}⚠️ Pipe command not found. Installing...${NC}" | tee -a "$log_file"
+                    install_pipe
                     if ! command -v pipe >/dev/null 2>&1; then
-                        echo -e "${RED}❌ Pipe still not found after setup. Exiting.${NC}" | tee -a "$log_file"
+                        echo -e "${RED}❌ Pipe installation failed. Exiting.${NC}" | tee -a "$log_file"
                         deactivate
                         cleanup
                         exit 1
@@ -379,7 +426,7 @@ upload_videos() {
     echo -e "${GREEN}✅ Upload logs saved in ./upload_logs/${NC}"
 }
 
-# Video downloader scripts (embedded as in original)
+# Video downloader scripts
 cat << 'EOF' > video_downloader.py
 import yt_dlp
 import os
@@ -851,9 +898,24 @@ if __name__ == "__main__":
         print("Please provide a search query and output filename.")
 EOF
 
-# Main execution
-check_dependencies
-setup_pipe_path  # Run initially to ensure pipe is available
-upload_videos
-cleanup
-echo -e "${GREEN}👋 Daily uploads completed successfully!${NC}"
+# Main execution loop with daily timer
+while true; do
+    # Wait for a random time between 12 AM and 11 PM next day (0 to 82800 seconds = 23 hours)
+    sleep_time=$((RANDOM % 82801))
+    echo -e "${BLUE}⏳ Waiting for $(($sleep_time / 3600)) hours $(($sleep_time % 3600 / 60)) minutes before starting today's uploads...${NC}"
+    sleep $sleep_time
+
+    echo -e "${GREEN}🚀 Starting daily video uploads at $(date)...${NC}"
+    check_dependencies
+    setup_pipe_path
+    upload_videos
+    cleanup
+    echo -e "${GREEN}👋 Daily uploads completed at $(date). Waiting for next day...${NC}"
+
+    # Sleep until the next day (ensure at least 24 hours from start)
+    remaining_time=$((86400 - sleep_time))
+    if [ $remaining_time -gt 0 ]; then
+        echo -e "${BLUE}⏳ Sleeping for $(($remaining_time / 3600)) hours $(($remaining_time % 3600 / 60)) minutes until next day...${NC}"
+        sleep $remaining_time
+    fi
+done
