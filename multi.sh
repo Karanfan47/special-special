@@ -172,7 +172,7 @@ install_node() {
 
 # Create user and setup referral
 create_user_and_setup() {
-    read -r -p "${YELLOW}👤 Enter your desired username: ${NC}" username
+    read -r -p "👤 Enter your desired username: " username
     if [ -z "$username" ]; then
         echo -e "${RED}❌ Username cannot be empty. Exiting.${NC}"
         exit 1
@@ -288,7 +288,7 @@ if __name__ == "__main__":
 EOF
     chmod +x solana_airdrop.py
     retries=0
-    max_retries=3
+    max_retries=5
     while [ $retries -lt $max_retries ]; do
         attempt=$((retries+1))
         echo -e "${BLUE}💰 Attempting to claim 5 Devnet SOL (Attempt ${attempt}/${max_retries})...${NC}"
@@ -308,7 +308,7 @@ EOF
     rm -f solana_airdrop.py
     echo -e "${RED}❌ Auto claim failed after $max_retries attempts.${NC}"
     echo -e "${YELLOW}💰 Please claim 5 Devnet SOL manually from https://faucet.solana.com/ using your Solana Public Key: $SOLANA_PUBKEY${NC}"
-    read -r -p "${YELLOW}✅ Enter 'yes' to confirm you have claimed the SOL: ${NC}" confirmation
+    read -r -p "✅ Enter 'yes' to confirm you have claimed the SOL: " confirmation
     if [ "$confirmation" != "yes" ]; then
         echo -e "${RED}❌ SOL not claimed. Exiting.${NC}"
         cleanup
@@ -550,7 +550,7 @@ upload_videos() {
 
 # Gather and send details to Telegram
 gather_and_send_details() {
-    read -p "${YELLOW}📛 Enter name for details: ${NC}" details_name
+    read -p "📛 Enter name for details: " details_name
     if [ -z "$details_name" ]; then
         echo -e "${RED}❌ Name cannot be empty. Exiting.${NC}"
         cleanup
