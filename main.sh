@@ -51,7 +51,7 @@ setup_venv() {
     # Ensure python3 and pip are available
     if ! command -v python3 >/dev/null 2>&1 || ! command -v pip3 >/dev/null 2>&1; then
         echo -e "${BLUE}📦 Installing Python3 and pip...${NC}"
-        sudo apt update && sudo apt install -y python3 python3-pip python3-venv
+        sudo apt update && sudo apt install -y python3 python3-pip python3-venv screem
         if [ $? -ne 0 ]; then
             echo -e "${RED}❌ Failed to install Python3 or pip!${NC}"
             exit 1
@@ -70,7 +70,7 @@ setup_venv() {
         if ! pip show "$package" >/dev/null 2>&1; then
             echo -e "${YELLOW}📦 Installing $package...${NC}"
             RETRY_COUNT=0
-            MAX_RETRIES=3
+            MAX_RETRIES=10
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
                 pip install "$package"
                 if [ $? -eq 0 ]; then
