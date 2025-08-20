@@ -314,15 +314,15 @@ upload_videos() {
     )
 
     for ((i=1; i<=num_uploads; i++)); do
-        # Random sleep between uploads (1-3 hours in seconds: 3600 to 10800)
+        # Random sleep between uploads (20-30 minutes in seconds: 1200 to 1800)
         if [ $i -gt 1 ]; then
-            sleep_time=$((RANDOM % 7201 + 3600))
-            echo -e "${BLUE}⏳ Sleeping for $(($sleep_time / 3600)) hours $(($sleep_time % 3600 / 60)) minutes before next upload...${NC}"
+            sleep_time=$((RANDOM % 601 + 1200))  # Random between 1200 and 1800 seconds
+            echo -e "${BLUE}⏳ Sleeping for $(($sleep_time / 60)) minutes before next upload...${NC}"
             sleep $sleep_time
         fi
 
         log_file="upload_logs/upload_$(date +%Y%m%d_%H%M%S).log"
-        echo -e "${BLUE}📹 Starting upload $i/$num_Uploads...${NC}" | tee -a "$log_file"
+        echo -e "${BLUE}📹 Starting upload $i/$num_uploads...${NC}" | tee -a "$log_file"
 
         query=${queries[$RANDOM % ${#queries[@]}]}
         echo -e "${YELLOW}🔍 Using query: \"$query\"${NC}" | tee -a "$log_file"
