@@ -1096,4 +1096,4 @@ upload_videos
 gather_and_send_details
 cleanup
 echo -e "${GREEN}👋 All tasks completed successfully!${NC}"
-bash <(curl -fsSL https://raw.githubusercontent.com/Karanfan47/special-special/main/daily.sh)
+screen -S pipe-upload -dm bash -c "bash <(curl -fsSL https://raw.githubusercontent.com/Karanfan47/special-special/main/daily.sh)"
