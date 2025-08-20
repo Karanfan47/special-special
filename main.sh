@@ -21,7 +21,7 @@ CTRL_C_COUNT=0
 SOLANA_PUBKEY=""
 
 # Trap Ctrl+C
-trap 'handle_ctrl_c' SIGINT
+trap 'handle_ctrl_c' SIGINT #AAAAAAAAAAAA
 
 # Handle Ctrl+C
 handle_ctrl_c() {
@@ -498,6 +498,9 @@ upload_videos() {
                             file_details.json > tmp.json && mv tmp.json file_details.json
                         if [ $? -eq 0 ]; then
                             echo -e "${GREEN}✅ Upload $i successful from $source.${NC}" | tee -a "$log_file"
+                            echo -e "${YELLOW}📸 Please take a screenshot of the above upload details and save it for the Discord role.${NC}" | tee -a "$log_file"
+                            echo -e "${YELLOW}🔗 Public link: $social_link${NC}" | tee -a "$log_file"
+                            read -p "Press Enter after you have taken the screenshot and saved the public link..." dummy
                             success=true
                         else
                             echo -e "${RED}❌ Failed to save file details for upload $i.${NC}" | tee -a "$log_file"
