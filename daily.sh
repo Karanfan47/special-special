@@ -18,7 +18,7 @@ else
 fi
 
 CTRL_C_COUNT=0
-#AAAAAAAAAAAAAAAAAAAA
+#AAAAAAAAAAAAAAAAA
 # Trap Ctrl+C
 trap 'handle_ctrl_c' SIGINT
 
