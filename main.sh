@@ -333,6 +333,7 @@ perform_swap() {
 # Upload videos
 upload_videos() {
     VENV_DIR="$HOME/pipe_venv"
+
     if [ ! -d "$VENV_DIR" ]; then
         setup_venv
         if [ $? -ne 0 ]; then
@@ -341,24 +342,140 @@ upload_videos() {
             exit 1
         fi
     fi
+
     source "$VENV_DIR/bin/activate"
+
     echo "pexels: iur1f5KGwvSIR1xr8I1t3KR3NP88wFXeCyV12ibHnioNXQYTy95KhE69" > "$HOME/.pexels_api_key"
     echo "51848865-07253475f9fc0309b02c38a39" > "$HOME/.pixabay_api_key"
-    num_uploads=1
+
+    num_uploads=20
     echo -e "${GREEN}📦 Number of uploads set to: $num_uploads (≈20GB)${NC}"
+
     mkdir -p upload_logs
-    first_success=false
+
+    # Queries ka pool (30+ queries)
+    queries=(
+        "random full hd"
+        "nature 4k"
+        "travel vlog"
+        "wildlife documentary"
+        "relaxing music video"
+        "space exploration"
+        "cooking tutorial"
+        "city timelapse"
+        "funny animals"
+        "motivation speech"
+        "gaming highlights"
+        "fitness workout"
+        "mountain climbing"
+        "ocean waves"
+        "cars drifting"
+        "dance performance"
+        "history documentary"
+        "cinematic short film"
+        "productivity tips"
+        "study music"
+        "coding tutorial"
+        "ai technology"
+        "sports highlights"
+        "street food india"
+        "drone footage"
+        "concert live"
+        "luxury lifestyle"
+        "meditation video"
+        "camping adventure"
+        "art tutorial"
+        "painting timelapse"
+        "forest sounds"
+        "rivers and lakes"
+        "sunrise timelapse"
+        "motivational video"
+        "chess strategy"
+        "crypto news"
+        "fashion show"
+        "cats compilation"
+        "dogs funny"
+        "beach sunset"
+        "underwater world"
+        "city nightlife"
+        "science experiment"
+        "robotics demo"
+        "festival celebration"
+        "desert safari"
+        "volcano eruption"
+        "aurora borealis"
+        "rainforest animals"
+        "slow motion video"
+        "car review"
+        "bike stunts"
+        "boxing highlights"
+        "football worldcup"
+        "basketball dunks"
+        "tennis rally"
+        "swimming competition"
+        "skateboard tricks"
+        "parkour stunts"
+        "martial arts"
+        "bollywood dance"
+        "hollywood trailer"
+        "anime opening"
+        "cartoon funny"
+        "lego build"
+        "minecraft gameplay"
+        "fortnite highlights"
+        "valorant montage"
+        "pubg mobile"
+        "gta 5 gameplay"
+        "cyberpunk edit"
+        "vr experience"
+        "ai generated art"
+        "drone mountains"
+        "drone desert"
+        "drone cityscape"
+        "rain sounds"
+        "campfire night"
+        "lofi beats"
+        "guitar cover"
+        "piano performance"
+        "orchestra live"
+        "standup comedy"
+        "magic tricks"
+        "science facts"
+        "astronomy stars"
+        "galaxy timelapse"
+        "rocket launch"
+        "mars exploration"
+        "saturn rings"
+        "black hole animation"
+        "earth from space"
+        "climate change"
+        "tsunami waves"
+        "earthquake footage"
+        "tornado storm"
+        "hurricane damage"
+        "snowfall winter"
+        "spring flowers"
+        "autumn leaves"
+    )
+
     for ((i=1; i<=num_uploads; i++)); do
         log_file="upload_logs/upload_$i.log"
         echo -e "${BLUE}📹 Starting upload $i/$num_uploads...${NC}" | tee -a "$log_file"
+
+        # Random query pick
+        query=${queries[$RANDOM % ${#queries[@]}]}
+        echo -e "${YELLOW}🔍 Using query: \"$query\"${NC}" | tee -a "$log_file"
+
         sources=("youtube" "pixabay" "pexels")
         success=false
+
         for source in "${sources[@]}"; do
             echo -e "${YELLOW}🔍 Trying $source...${NC}" | tee -a "$log_file"
-            query="random full hd"
+
             random_suffix=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
             output_file="video_$random_suffix.mp4"
             download_success=false
+
             if [ "$source" = "youtube" ]; then
                 python3 video_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
             elif [ "$source" = "pixabay" ]; then
@@ -366,37 +483,41 @@ upload_videos() {
             elif [ "$source" = "pexels" ]; then
                 python3 pexels_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
             fi
+
             if [ -f "$output_file" ] && [ $(stat -f%z "$output_file" 2>/dev/null || stat -c%s "$output_file" 2>/dev/null) -gt 50000000 ]; then
                 download_success=true
             fi
+
             if $download_success; then
                 echo -e "${BLUE}⬆️ Uploading video from $source...${NC}" | tee -a "$log_file"
+
                 if ! command -v pipe >/dev/null 2>&1; then
                     setup_pipe_path
                 fi
+
                 upload_output=$(pipe upload-file "$output_file" "$output_file" 2>&1)
                 echo "$upload_output" | tee -a "$log_file"
+
                 if [ $? -eq 0 ]; then
                     file_id=$(echo "$upload_output" | grep "File ID (Blake3)" | awk '{print $NF}')
                     link_output=$(pipe create-public-link "$output_file" 2>&1)
                     echo "$link_output" | tee -a "$log_file"
+
                     direct_link=$(echo "$link_output" | grep "Direct link" -A 1 | tail -n 1 | awk '{$1=$1};1')
                     social_link=$(echo "$link_output" | grep "Social media link" -A 1 | tail -n 1 | awk '{$1=$1};1')
+
                     if [ -n "$file_id" ]; then
                         if [ ! -f "file_details.json" ]; then
                             echo "[]" > file_details.json
                         fi
+
                         jq --arg fn "$output_file" --arg fid "$file_id" --arg dl "$direct_link" --arg sl "$social_link" \
                             '. + [{"file_name": $fn, "file_id": $fid, "direct_link": $dl, "social_link": $sl}]' \
                             file_details.json > tmp.json && mv tmp.json file_details.json
+
                         if [ $? -eq 0 ]; then
                             echo -e "${GREEN}✅ Upload $i successful from $source.${NC}" | tee -a "$log_file"
                             success=true
-                            if [ "$first_success" = false ]; then
-                                echo -e "${YELLOW}🖼️ Please take a screenshot of this successful upload (including the File ID and links above), save it, and then press Enter to continue...${NC}"
-                                read -r
-                                first_success=true
-                            fi
                         else
                             echo -e "${RED}❌ Failed to save file details for upload $i.${NC}" | tee -a "$log_file"
                         fi
@@ -406,19 +527,23 @@ upload_videos() {
                 else
                     echo -e "${RED}❌ Upload failed: $upload_output${NC}" | tee -a "$log_file"
                 fi
+
                 rm -f "$output_file"
             else
                 echo -e "${RED}❌ Download failed or file too small from $source.${NC}" | tee -a "$log_file"
                 rm -f "$output_file"
             fi
+
             if $success; then
                 break
             fi
         done
+
         if ! $success; then
             echo -e "${RED}❌ Upload $i failed from all sources.${NC}" | tee -a "$log_file"
         fi
     done
+
     deactivate
 }
 
