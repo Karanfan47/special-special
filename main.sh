@@ -21,7 +21,7 @@ CTRL_C_COUNT=0
 SOLANA_PUBKEY=""
 
 # Trap Ctrl+C
-trap 'handle_ctrl_c' SIGINT #AAAAAAAAAAAA
+trap 'handle_ctrl_c' SIGINT
 
 # Handle Ctrl+C
 handle_ctrl_c() {
