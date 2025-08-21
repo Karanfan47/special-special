@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Check if terminal supports colors
 if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors)" -ge 8 ]; then
     RED='\033[0;31m'
@@ -16,12 +15,9 @@ else
     NC=''
     BOLD=''
 fi
-
 CTRL_C_COUNT=0
-#AAAAAAAAAAAAAAAAA
 # Trap Ctrl+C
 trap 'handle_ctrl_c' SIGINT
-
 # Handle Ctrl+C
 handle_ctrl_c() {
     ((CTRL_C_COUNT++))
@@ -34,19 +30,16 @@ handle_ctrl_c() {
     cleanup
     exit 0
 }
-
 # Cleanup temporary files (excluding upload_logs)
 cleanup() {
     echo -e "${BLUE}🧹 Cleaning up temporary files (preserving upload_logs)...${NC}"
     rm -f tmp.json list.txt video_*.mp4 pix_*.mp4 pex_*.mp4 2>/dev/null
     echo -e "${GREEN}✅ Upload logs preserved in ./upload_logs/${NC}"
 }
-
 # Setup Python virtual environment
 setup_venv() {
     VENV_DIR="$HOME/pipe_venv"
     echo -e "${BLUE}🛠️ Setting up Python virtual environment at $VENV_DIR...${NC}"
-  
     # Ensure python3 and pip are available
     if ! command -v python3 >/dev/null 2>&1 || ! command -v pip3 >/dev/null 2>&1; then
         echo -e "${BLUE}📦 Installing Python3 and pip...${NC}"
@@ -56,7 +49,6 @@ setup_venv() {
             exit 1
         fi
     fi
-
     if [ ! -d "$VENV_DIR" ]; then
         python3 -m venv "$VENV_DIR"
         if [ $? -ne 0 ]; then
@@ -64,7 +56,6 @@ setup_venv() {
             exit 1
         fi
     fi
-
     source "$VENV_DIR/bin/activate"
     pip install --upgrade pip
     for package in yt-dlp requests moviepy; do
@@ -91,7 +82,6 @@ setup_venv() {
     echo -e "${GREEN}✅ All required packages installed successfully in venv!${NC}"
     deactivate
 }
-
 # Install pipe node if not found
 install_pipe() {
     echo -e "${BLUE}🔍 Checking if Pipe is installed...${NC}"
@@ -99,14 +89,12 @@ install_pipe() {
         echo -e "${GREEN}✅ Pipe is already installed!${NC}"
         return 0
     fi
-
     echo -e "${BLUE}🔄 Installing dependencies for Pipe...${NC}"
     sudo apt update && sudo apt install -y curl build-essential git wget lz4 jq make gcc libgbm1 pkg-config libssl-dev tar clang bsdmainutils unzip libleveldb-dev libclang-dev ninja-build
     if [ $? -ne 0 ]; then
         echo -e "${RED}❌ Failed to install dependencies!${NC}"
         exit 1
     fi
-
     echo -e "${BLUE}🦀 Installing Rust...${NC}"
     curl https://sh.rustup.rs -sSf | sh -s -- -y
     if [ $? -ne 0 ]; then
@@ -114,14 +102,12 @@ install_pipe() {
         exit 1
     fi
     source "$HOME/.cargo/env"
-
     echo -e "${BLUE}📥 Cloning and installing Pipe...${NC}"
     git clone https://github.com/PipeNetwork/pipe.git "$HOME/pipe"
     if [ $? -ne 0 ]; then
         echo -e "${RED}❌ Failed to clone Pipe repository!${NC}"
         exit 1
     fi
-
     cd "$HOME/pipe"
     cargo install --path .
     if [ $? -ne 0 ]; then
@@ -129,7 +115,6 @@ install_pipe() {
         exit 1
     fi
     cd "$HOME"
-
     setup_pipe_path
     if ! command -v pipe >/dev/null 2>&1; then
         echo -e "${RED}❌ Pipe installation failed! Checking PATH: $PATH${NC}"
@@ -137,7 +122,6 @@ install_pipe() {
     fi
     echo -e "${GREEN}✅ Pipe installed successfully!${NC}"
 }
-
 # Setup pipe path
 setup_pipe_path() {
     if [ -f "$HOME/.cargo/bin/pipe" ]; then
@@ -158,7 +142,6 @@ setup_pipe_path() {
         install_pipe
     fi
 }
-
 # Check and handle dependencies like ffmpeg and jq
 check_dependencies() {
     if ! command -v ffmpeg >/dev/null 2>&1; then
@@ -170,7 +153,6 @@ check_dependencies() {
         fi
         echo -e "${GREEN}✅ ffmpeg installed successfully.${NC}"
     fi
-
     if ! command -v jq >/dev/null 2>&1; then
         echo -e "${YELLOW}⚠️ jq not found. Attempting to install...${NC}"
         sudo apt update && sudo apt install -y jq
@@ -181,7 +163,6 @@ check_dependencies() {
         echo -e "${GREEN}✅ jq installed successfully.${NC}"
     fi
 }
-
 # Upload videos
 upload_videos() {
     VENV_DIR="$HOME/pipe_venv"
@@ -193,9 +174,7 @@ upload_videos() {
             exit 1
         fi
     fi
-
     source "$VENV_DIR/bin/activate"
-
     # Set API keys
     if [ ! -f "$HOME/.pexels_api_key" ]; then
         echo "pexels: iur1f5KGwvSIR1xr8I1t3KR3NP88wFXeCyV12ibHnioNXQYTy95KhE69" > "$HOME/.pexels_api_key"
@@ -203,12 +182,9 @@ upload_videos() {
     if [ ! -f "$HOME/.pixabay_api_key" ]; then
         echo "51848865-07253475f9fc0309b02c38a39" > "$HOME/.pixabay_api_key"
     fi
-
-    num_uploads=$((RANDOM % 3 + 5))  # Random between 5 and 7
+    num_uploads=$((RANDOM % 5 + 3)) # Random between 3 and 7
     echo -e "${GREEN}📦 Number of uploads for today: $num_uploads${NC}"
-
     mkdir -p upload_logs
-
     queries=(
         "random full hd"
         "nature 4k"
@@ -312,29 +288,23 @@ upload_videos() {
         "spring flowers"
         "autumn leaves"
     )
-
     for ((i=1; i<=num_uploads; i++)); do
         # Random sleep between uploads (20-30 minutes in seconds: 1200 to 1800)
         if [ $i -gt 1 ]; then
-            sleep_time=$((RANDOM % 601 + 1200))  # Random between 1200 and 1800 seconds
+            sleep_time=$((RANDOM % 601 + 1200)) # Random between 1200 and 1800 seconds
             echo -e "${BLUE}⏳ Sleeping for $(($sleep_time / 60)) minutes before next upload...${NC}"
             sleep $sleep_time
         fi
-
         log_file="upload_logs/upload_$(date +%Y%m%d_%H%M%S).log"
         echo -e "${BLUE}📹 Starting upload $i/$num_uploads...${NC}" | tee -a "$log_file"
-
         query=${queries[$RANDOM % ${#queries[@]}]}
         echo -e "${YELLOW}🔍 Using query: \"$query\"${NC}" | tee -a "$log_file"
-
         sources=("youtube" "pixabay" "pexels")
         success=false
         for source in "${sources[@]}"; do
             echo -e "${YELLOW}🔍 Trying $source...${NC}" | tee -a "$log_file"
-
             random_suffix=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
             output_file="video_$random_suffix.mp4"
-
             download_success=false
             if [ "$source" = "youtube" ]; then
                 python3 video_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
@@ -343,14 +313,11 @@ upload_videos() {
             elif [ "$source" = "pexels" ]; then
                 python3 pexels_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
             fi
-
             if [ -f "$output_file" ] && [ $(stat -f%z "$output_file" 2>/dev/null || stat -c%s "$output_file" 2>/dev/null) -gt 50000000 ]; then
                 download_success=true
             fi
-
             if $download_success; then
                 echo -e "${BLUE}⬆️ Uploading video from $source...${NC}" | tee -a "$log_file"
-
                 # Handle pipe command not found
                 if ! command -v pipe >/dev/null 2>&1; then
                     echo -e "${YELLOW}⚠️ Pipe command not found. Installing...${NC}" | tee -a "$log_file"
@@ -362,7 +329,6 @@ upload_videos() {
                         exit 1
                     fi
                 fi
-
                 # Upload with retry
                 RETRY_COUNT=0
                 MAX_RETRIES=3
@@ -375,7 +341,6 @@ upload_videos() {
                         echo "$link_output" | tee -a "$log_file"
                         direct_link=$(echo "$link_output" | grep "Direct link" -A 1 | tail -n 1 | awk '{$1=$1};1')
                         social_link=$(echo "$link_output" | grep "Social media link" -A 1 | tail -n 1 | awk '{$1=$1};1')
-
                         if [ -n "$file_id" ]; then
                             if [ ! -f "file_details.json" ]; then
                                 echo "[]" > file_details.json
@@ -385,7 +350,7 @@ upload_videos() {
                                 file_details.json > tmp.json && mv tmp.json file_details.json
                             if [ $? -eq 0 ]; then
                                 echo -e "${GREEN}✅ Upload $i successful from $source.${NC}" | tee -a "$log_file"
-                                echo -e "${YELLOW}🔗 Public link: $social_link${NC}" | tee -a "$log_file"
+                                echo -e "${YELLOW}🔗 Public link: $social_link${NC}\n\n\n" | tee -a "$log_file"
                                 success=true
                             else
                                 echo -e "${RED}❌ Failed to save file details for upload $i.${NC}" | tee -a "$log_file"
@@ -401,31 +366,25 @@ upload_videos() {
                         sleep 10
                     fi
                 done
-
                 if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
                     echo -e "${RED}❌ Upload failed after $MAX_RETRIES attempts.${NC}" | tee -a "$log_file"
                 fi
-
                 rm -f "$output_file"
             else
                 echo -e "${RED}❌ Download failed or file too small from $source.${NC}" | tee -a "$log_file"
                 rm -f "$output_file"
             fi
-
             if $success; then
                 break
             fi
         done
-
         if ! $success; then
             echo -e "${RED}❌ Upload $i failed from all sources.${NC}" | tee -a "$log_file"
         fi
     done
-
     deactivate
     echo -e "${GREEN}✅ Upload logs saved in ./upload_logs/${NC}"
 }
-
 # Video downloader scripts
 cat << 'EOF' > video_downloader.py
 import yt_dlp
@@ -579,7 +538,6 @@ if __name__ == "__main__":
     else:
         print("Please provide a search query and output filename.")
 EOF
-
 cat << 'EOF' > pixabay_downloader.py
 import requests
 import os
@@ -735,7 +693,6 @@ if __name__ == "__main__":
     else:
         print("Please provide a search query and output filename.")
 EOF
-
 cat << 'EOF' > pexels_downloader.py
 import requests
 import os
@@ -833,7 +790,7 @@ def download_videos(query, output_file, target_size_mb=1000):
                 for chunk in resp.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
-                        downloaded += len(chunk)
+                        downloaded = len(chunk)
                         percent = downloaded / size * 100 if size else 0
                         speed = downloaded / (1024*1024 * (time.time() - start_time)) if (time.time() - start_time) > 0 else 0
                         eta = (size - downloaded) / (speed * 1024*1024) if speed > 0 else 0
@@ -897,21 +854,18 @@ if __name__ == "__main__":
     else:
         print("Please provide a search query and output filename.")
 EOF
-
 # Main execution loop with daily timer
 while true; do
     # Wait for a random time between 12 AM and 11 PM next day (0 to 82800 seconds = 23 hours)
     sleep_time=$((RANDOM % 82801))
     echo -e "${BLUE}⏳ Waiting for $(($sleep_time / 3600)) hours $(($sleep_time % 3600 / 60)) minutes before starting today's uploads...${NC}"
     sleep $sleep_time
-
     echo -e "${GREEN}🚀 Starting daily video uploads at $(date)...${NC}"
     check_dependencies
     setup_pipe_path
     upload_videos
     cleanup
     echo -e "${GREEN}👋 Daily uploads completed at $(date). Waiting for next day...${NC}"
-
     # Sleep until the next day (ensure at least 24 hours from start)
     remaining_time=$((86400 - sleep_time))
     if [ $remaining_time -gt 0 ]; then
