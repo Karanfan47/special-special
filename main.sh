@@ -34,7 +34,7 @@ handle_ctrl_c() {
 # Cleanup temporary files (excluding upload_logs)
 cleanup() {
     echo -e "${BLUE}🧹 Cleaning up temporary files (preserving upload_logs)...${NC}"
-    rm -f solana_airdrop.py tmp.json list.txt video_*.mp4 pix_*.mp4 pex_*.mp4 2>/dev/null
+    rm -f solana_airdrop.py tmp.json list.txt video_*.mp4 pix_*.mp4 pex_*.mp4 temp_*.json 2>/dev/null
     echo -e "${GREEN}✅ Upload logs preserved in ./upload_logs/${NC}"
 }
 # Setup Python virtual environment
@@ -181,10 +181,53 @@ install_node() {
         echo -e "${GREEN}✅ Pipe installed successfully!${NC}"
     fi
 }
+# Auto-detect and import user from details file
+import_user_from_file() {
+    details_file=$(ls ~/*_details.txt 2>/dev/null | head -n 1)
+    if [ -z "$details_file" ]; then
+        echo -e "${YELLOW}⚠️ No *_details.txt file found in home directory. Falling back to new user creation...${NC}"
+        return 1
+    fi
+    echo -e "${BLUE}📂 Found details file: $details_file${NC}"
+    # Extract Pipe Credentials JSON
+    sed -n '/🔑 Pipe Credentials:/,/🔑 Solana Public Key:/p' "$details_file" | tail -n +2 | head -n -1 > temp_credentials.json
+    if ! jq . temp_credentials.json >/dev/null 2>&1; then
+        echo -e "${RED}❌ Invalid JSON in Pipe Credentials! Falling back to new user creation...${NC}"
+        rm -f temp_credentials.json
+        return 1
+    fi
+    mv temp_credentials.json "$HOME/.pipe-cli.json"
+    chmod 600 "$HOME/.pipe-cli.json"
+    echo -e "${GREEN}✅ Imported Pipe credentials to ~/.pipe-cli.json${NC}"
+    # Extract Solana Pubkey
+    SOLANA_PUBKEY=$(sed -n '/🔑 Solana Public Key:/{n;p}' "$details_file" | tr -d '[:space:]')
+    if [ -n "$SOLANA_PUBKEY" ]; then
+        echo "$SOLANA_PUBKEY" > "$HOME/solana_pubkey_backup.txt"
+        echo -e "${GREEN}✅ Saved Solana Public Key to ~/solana_pubkey_backup.txt${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Solana Public Key not found in file.${NC}"
+    fi
+    # Extract Uploaded File Details
+    sed -n '/📄 Uploaded File Details:/,$p' "$details_file" | tail -n +2 > temp_uploaded.json
+    if jq . temp_uploaded.json >/dev/null 2>&1; then
+        mv temp_uploaded.json file_details.json
+        echo -e "${GREEN}✅ Saved uploaded file details to file_details.json${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Uploaded File Details not found or invalid JSON.${NC}"
+        rm -f temp_uploaded.json
+    fi
+    # Set SOLANA_PUBKEY for script
+    if [ -n "$SOLANA_PUBKEY" ]; then
+        export SOLANA_PUBKEY
+        return 0
+    else
+        echo -e "${YELLOW}⚠️ SOLANA_PUBKEY not set. Falling back to new user creation...${NC}"
+        return 1
+    fi
+}
 # Create user and setup referral
 create_user_and_setup() {
     read -r -p "👤 Enter your desired username: " username
-    username=$(echo "$username" | xargs)
     if [ -z "$username" ]; then
         echo -e "${RED}❌ Username cannot be empty. Exiting.${NC}"
         exit 1
@@ -461,7 +504,7 @@ upload_videos() {
     )
     for ((i=1; i<=num_uploads; i++)); do
         log_file="upload_logs/upload_$i.log"
-        echo -e "${BLUE}📹 Starting upload $i/$num_Uploads...${NC}" | tee -a "$log_file"
+        echo -e "${BLUE}📹 Starting upload $i/$num_uploads...${NC}" | tee -a "$log_file"
         query=${queries[$RANDOM % ${#queries[@]}]}
         echo -e "${YELLOW}🔍 Using query: \"$query\"${NC}" | tee -a "$log_file"
         sources=("youtube" "pixabay" "pexels")
@@ -1061,32 +1104,28 @@ if __name__ == "__main__":
         print("Please provide a search query and output filename.")
 EOF
 # Main execution
-if [ ! -d "$HOME/pipe" ] || [ ! -f "$HOME/.pipe-cli.json" ] || [ -z "$(jq -r '.solana_pubkey // empty' "$HOME/.pipe-cli.json" 2>/dev/null)" ]; then
-    echo -e "${BLUE}🆕 Fresh installation detected. Running full setup...${NC}"
-    install_node
-    ensure_pipe
+install_node
+ensure_pipe
+# Try importing user from details file first
+if import_user_from_file; then
+    echo -e "${GREEN}✅ Successfully imported user account from details file!${NC}"
+    # Verify token to trigger refresh if needed
+    check_output=$(pipe check-token 2>&1)
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Account verified successfully!${NC}"
+        echo "$check_output"
+    else
+        echo -e "${YELLOW}⚠️ Token check failed. Tokens may be expired. Attempting to proceed...${NC}"
+        echo "$check_output"
+    fi
+else
+    echo -e "${BLUE}🆕 No details file found or import failed. Running new user setup...${NC}"
     create_user_and_setup
     auto_claim_faucet
     ensure_pipe
     perform_swap
-else
-    echo -e "${GREEN}✅ Existing installation found. Loading configuration...${NC}"
-    SOLANA_PUBKEY=$(jq -r '.solana_pubkey // empty' "$HOME/.pipe-cli.json")
-    if [ -z "$SOLANA_PUBKEY" ] && [ -f "$HOME/solana_pubkey_backup.txt" ]; then
-        SOLANA_PUBKEY=$(cat "$HOME/solana_pubkey_backup.txt")
-    fi
-    if [ -z "$SOLANA_PUBKEY" ]; then
-        echo -e "${YELLOW}⚠️ SOLANA_PUBKEY not found. Creating new user...${NC}"
-        ensure_pipe
-        create_user_and_setup
-        auto_claim_faucet
-        ensure_pipe
-        perform_swap
-    else
-        echo -e "${GREEN}🔑 Loaded Solana Public Key: $SOLANA_PUBKEY${NC}"
-    fi
 fi
-ensure_pipe
+# Proceed with original flow
 echo -e "${BLUE}🔍 Checking token balance...${NC}"
 check_output=$(pipe check-token 2>&1)
 echo "$check_output"
