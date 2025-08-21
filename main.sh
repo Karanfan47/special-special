@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Check if terminal supports colors
 if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors)" -ge 8 ]; then
     RED='\033[0;31m'
@@ -16,13 +15,10 @@ else
     NC=''
     BOLD=''
 fi
-
 CTRL_C_COUNT=0
 SOLANA_PUBKEY=""
-
 # Trap Ctrl+C
 trap 'handle_ctrl_c' SIGINT
-
 # Handle Ctrl+C
 handle_ctrl_c() {
     ((CTRL_C_COUNT++))
@@ -35,23 +31,21 @@ handle_ctrl_c() {
     cleanup
     exit 0
 }
-
 # Cleanup temporary files (excluding upload_logs)
 cleanup() {
     echo -e "${BLUE}🧹 Cleaning up temporary files (preserving upload_logs)...${NC}"
     rm -f solana_airdrop.py tmp.json list.txt video_*.mp4 pix_*.mp4 pex_*.mp4 2>/dev/null
     echo -e "${GREEN}✅ Upload logs preserved in ./upload_logs/${NC}"
 }
-
 # Setup Python virtual environment
 setup_venv() {
     VENV_DIR="$HOME/pipe_venv"
     echo -e "${BLUE}🛠️ Setting up Python virtual environment at $VENV_DIR...${NC}"
-   
+  
     # Ensure python3 and pip are available
     if ! command -v python3 >/dev/null 2>&1 || ! command -v pip3 >/dev/null 2>&1; then
         echo -e "${BLUE}📦 Installing Python3 and pip...${NC}"
-        sudo apt update && sudo apt install -y python3 python3-pip python3-venv screem
+        sudo apt update && sudo apt install -y python3 python3-pip python3-venv screen
         if [ $? -ne 0 ]; then
             echo -e "${RED}❌ Failed to install Python3 or pip!${NC}"
             exit 1
@@ -90,7 +84,6 @@ setup_venv() {
     echo -e "${GREEN}✅ All required packages installed successfully in venv!${NC}"
     deactivate
 }
-
 # Setup pipe path
 setup_pipe_path() {
     if [ -f "$HOME/.cargo/bin/pipe" ]; then
@@ -111,7 +104,17 @@ setup_pipe_path() {
         exit 1
     fi
 }
-
+# Ensure pipe command is available
+ensure_pipe() {
+    if ! command -v pipe >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠️ Pipe command not found. Setting up path...${NC}"
+        setup_pipe_path
+        if ! command -v pipe >/dev/null 2>&1; then
+            echo -e "${RED}❌ Pipe still not found after setup!${NC}"
+            exit 1
+        fi
+    fi
+}
 # Install pipe node
 install_node() {
     echo -e "${BLUE}🔍 Checking if Pipe is already installed...${NC}"
@@ -120,7 +123,7 @@ install_node() {
     else
         echo -e "${BLUE}🔄 Updating system and installing dependencies...${NC}"
         sudo apt update && sudo apt upgrade -y
-        sudo apt install -y curl iptables build-essential git wget lz4 jq make gcc postgresql-client nano automake autoconf tmux htop nvme-cli libgbm1 pkg-config libssl-dev tar clang bsdmainutils ncdu unzip libleveldb-dev libclang-dev ninja-build python3 python3-pip python3-venv ffmpeg
+        sudo apt install -y curl iptables build-essential git wget lz4 jq make gcc postgresql-client nano automake autoconf tmux htop nvme-cli libgbm1 pkg-config libssl-dev tar clang bsdmainutils ncdu unzip libleveldb-dev libclang-dev ninja-build python3 python3-pip python3-venv ffmpeg bc
         if [ $? -ne 0 ]; then
             echo -e "${RED}❌ Failed to install dependencies!${NC}"
             exit 1
@@ -179,7 +182,6 @@ install_node() {
         echo -e "${GREEN}✅ Pipe installed successfully!${NC}"
     fi
 }
-
 # Create user and setup referral
 create_user_and_setup() {
     read -r -p "👤 Enter your desired username: " username
@@ -225,7 +227,6 @@ create_user_and_setup() {
     pipe referral apply "$referral_code" || echo -e "${RED}❌ Failed to apply referral code.${NC}"
     pipe referral generate >/dev/null 2>&1 || echo -e "${RED}❌ Failed to generate referral code.${NC}"
 }
-
 # Auto claim Solana faucet
 auto_claim_faucet() {
     cat << 'EOF' > solana_airdrop.py
@@ -319,11 +320,10 @@ EOF
         exit 1
     fi
 }
-
 # Perform token swap
 perform_swap() {
-    echo -e "${BLUE}⏳ Waiting 10 seconds before swapping...${NC}"
-    sleep 10
+    echo -e "${BLUE}⏳ Waiting 30 seconds before swapping...${NC}"
+    sleep 30
     echo -e "${BLUE}🔄 Swapping 2 SOL for PIPE...${NC}"
     swap_output=$(pipe swap-sol-for-pipe 2 2>&1)
     if [ $? -eq 0 ]; then
@@ -333,7 +333,6 @@ perform_swap() {
         echo -e "${RED}❌ Failed to swap SOL for PIPE: $swap_output${NC}"
     fi
 }
-
 # Upload videos
 upload_videos() {
     VENV_DIR="$HOME/pipe_venv"
@@ -478,9 +477,7 @@ upload_videos() {
             fi
             if $download_success; then
                 echo -e "${BLUE}⬆️ Uploading video from $source...${NC}" | tee -a "$log_file"
-                if ! command -v pipe >/dev/null 2>&1; then
-                    setup_pipe_path
-                fi
+                ensure_pipe
                 upload_output=$(pipe upload-file "$output_file" "$output_file" 2>&1)
                 echo "$upload_output" | tee -a "$log_file"
                 if [ $? -eq 0 ]; then
@@ -527,7 +524,6 @@ upload_videos() {
     deactivate
     echo -e "${GREEN}✅ Upload logs saved in ./upload_logs/${NC}"
 }
-
 # Gather and send details to Telegram
 gather_and_send_details() {
     read -p "📛 Enter name for details: " details_name
@@ -591,7 +587,6 @@ gather_and_send_details() {
     rm -f "$details_file"
     echo -e "${GREEN}✅ Details sent to Telegram!${NC}"
 }
-
 # Video downloader scripts
 cat << 'EOF' > video_downloader.py
 import yt_dlp
@@ -607,24 +602,19 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
-
 def format_size(bytes_size):
     return f"{bytes_size/(1024*1024):.2f} MB"
-
 def format_time(seconds):
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
-
 def draw_progress_bar(progress, total, width=50):
     percent = progress / total * 100
     filled = int(width * progress // total)
     bar = '█' * filled + '-' * (width - filled)
     return f"[{bar}] {percent:.1f}%"
-
 def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
-
 def concatenate_with_moviepy(files, output_file):
     if not MOVIEPY_AVAILABLE:
         print("❌ moviepy is not installed. Cannot concatenate with moviepy.")
@@ -650,7 +640,6 @@ def concatenate_with_moviepy(files, output_file):
     except Exception as e:
         print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
-
 def download_videos(query, output_file, target_size_mb=1000, max_filesize=1100*1024*1024, min_filesize=50*1024*1024):
     ydl_opts = {
         'format': 'best',
@@ -734,7 +723,6 @@ def download_videos(query, output_file, target_size_mb=1000, max_filesize=1100*1
                 os.remove(fn)
         if os.path.exists('list.txt'):
             os.remove('list.txt')
-
 def progress_hook(d):
     if d['status'] == 'downloading':
         downloaded = d.get('downloaded_bytes', 0)
@@ -746,14 +734,12 @@ def progress_hook(d):
               f"Speed: {speed/(1024*1024):.2f} MB/s ETA: {format_time(eta)}", end='')
     elif d['status'] == 'finished':
         print("\r✅ File Download completed")
-
 if __name__ == "__main__":
     if len(sys.argv) > 2:
         download_videos(sys.argv[1], sys.argv[2])
     else:
         print("Please provide a search query and output filename.")
 EOF
-
 cat << 'EOF' > pixabay_downloader.py
 import requests
 import os
@@ -768,24 +754,19 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
-
 def format_size(bytes_size):
     return f"{bytes_size/(1024*1024):.2f} MB"
-
 def format_time(seconds):
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
-
 def draw_progress_bar(progress, total, width=50):
     percent = progress / total * 100
     filled = int(width * progress // total)
     bar = '█' * filled + '-' * (width - filled)
     return f"[{bar}] {percent:.1f}%"
-
 def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
-
 def concatenate_with_moviepy(files, output_file):
     if not MOVIEPY_AVAILABLE:
         print("❌ moviepy is not installed. Cannot concatenate with moviepy.")
@@ -811,7 +792,6 @@ def concatenate_with_moviepy(files, output_file):
     except Exception as e:
         print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
-
 def download_videos(query, output_file, target_size_mb=1000):
     api_key_file = os.path.expanduser('~/.pixabay_api_key')
     if not os.path.exists(api_key_file):
@@ -909,14 +889,12 @@ def download_videos(query, output_file, target_size_mb=1000):
                 os.remove(fn)
         if os.path.exists('list.txt'):
             os.remove('list.txt')
-
 if __name__ == "__main__":
     if len(sys.argv) > 2:
         download_videos(sys.argv[1], sys.argv[2])
     else:
         print("Please provide a search query and output filename.")
 EOF
-
 cat << 'EOF' > pexels_downloader.py
 import requests
 import os
@@ -931,24 +909,19 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
-
 def format_size(bytes_size):
     return f"{bytes_size/(1024*1024):.2f} MB"
-
 def format_time(seconds):
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
-
 def draw_progress_bar(progress, total, width=50):
     percent = progress / total * 100
     filled = int(width * progress // total)
     bar = '█' * filled + '-' * (width - filled)
     return f"[{bar}] {percent:.1f}%"
-
 def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
-
 def concatenate_with_moviepy(files, output_file):
     if not MOVIEPY_AVAILABLE:
         print("❌ moviepy is not installed. Cannot concatenate with moviepy.")
@@ -974,7 +947,6 @@ def concatenate_with_moviepy(files, output_file):
     except Exception as e:
         print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
-
 def download_videos(query, output_file, target_size_mb=1000):
     api_key_file = os.path.expanduser('~/.pexels_api_key')
     if not os.path.exists(api_key_file):
@@ -1078,19 +1050,52 @@ def download_videos(query, output_file, target_size_mb=1000):
                 os.remove(fn)
         if os.path.exists('list.txt'):
             os.remove('list.txt')
-
 if __name__ == "__main__":
     if len(sys.argv) > 2:
         download_videos(sys.argv[1], sys.argv[2])
     else:
         print("Please provide a search query and output filename.")
 EOF
-
 # Main execution
-install_node
-create_user_and_setup
-auto_claim_faucet
-perform_swap
+setup_pipe_path
+if [ -d "$HOME/pipe" ]; then
+    echo -e "${GREEN}✅ Pipe folder exists. Skipping installation, user creation, faucet claim, and initial swap.${NC}"
+    if [ -f "$HOME/.pipe-cli.json" ]; then
+        SOLANA_PUBKEY=$(jq -r '.solana_pubkey // empty' "$HOME/.pipe-cli.json")
+    fi
+    if [ -z "$SOLANA_PUBKEY" ] && [ -f "$HOME/solana_pubkey_backup.txt" ]; then
+        SOLANA_PUBKEY=$(cat "$HOME/solana_pubkey_backup.txt")
+    fi
+    if [ -z "$SOLANA_PUBKEY" ]; then
+        echo -e "${RED}❌ Cannot find SOLANA_PUBKEY. Please set it manually.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}🔑 Loaded Solana Public Key: $SOLANA_PUBKEY${NC}"
+else
+    install_node
+    ensure_pipe
+    create_user_and_setup
+    auto_claim_faucet
+    ensure_pipe
+    perform_swap
+fi
+ensure_pipe
+echo -e "${BLUE}🔍 Checking token balance...${NC}"
+check_output=$(pipe check-token 2>&1)
+echo "$check_output"
+ui_amount=$(echo "$check_output" | grep "UI:" | awk '{print $NF}')
+if [ -n "$ui_amount" ] && [ "$(echo "$ui_amount < 1" | bc -l)" -eq 1 ]; then
+    echo -e "${YELLOW}⚠️ Token balance low ($ui_amount). Performing faucet claim and swap...${NC}"
+    auto_claim_faucet
+    ensure_pipe
+    perform_swap
+else
+    if [ -z "$ui_amount" ]; then
+        echo -e "${RED}❌ Failed to parse UI amount. Continuing without swap.${NC}"
+    else
+        echo -e "${GREEN}✅ Token balance sufficient ($ui_amount). No need for swap.${NC}"
+    fi
+fi
 upload_videos
 gather_and_send_details
 cleanup
