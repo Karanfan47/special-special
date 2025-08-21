@@ -481,7 +481,7 @@ upload_videos() {
                 download_success=true
             fi
             if $download_success; then
-                echo -e "${BLUE}⬆️ Uploading video from $source...${NC}" | tee -a "$log_file"
+                echo -e "${BLUE}⬆️ Uploading video from $source...${NC}\n\n\n" | tee -a "$log_file"
                 ensure_pipe
                 upload_output=$(pipe upload-file "$output_file" "$output_file" 2>&1)
                 echo "$upload_output" | tee -a "$log_file"
@@ -499,6 +499,7 @@ upload_videos() {
                             '. + [{"file_name": $fn, "file_id": $fid, "direct_link": $dl, "social_link": $sl}]' \
                             file_details.json > tmp.json && mv tmp.json file_details.json
                         if [ $? -eq 0 ]; then
+                            echo -e "\n\n\n" | tee -a "$log_file"
                             echo -e "${GREEN}✅ Upload $i successful from $source.${NC}" | tee -a "$log_file"
                             echo -e "${YELLOW}📸 SS le lijiye taki role lene ke liye use kr skte 😊${NC}" | tee -a "$log_file"
                             echo -e "${YELLOW}🔗 Public link: $social_link${NC}" | tee -a "$log_file"
