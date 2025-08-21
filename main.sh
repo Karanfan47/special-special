@@ -18,7 +18,7 @@ fi
 CTRL_C_COUNT=0
 SOLANA_PUBKEY=""
 # Trap Ctrl+C
-trap 'handle_ctrl_c' SIGINT
+trap 'handle_ctrl_c' SIGINT #AAAAAAAAA
 # Handle Ctrl+C
 handle_ctrl_c() {
     ((CTRL_C_COUNT++))
@@ -41,7 +41,6 @@ cleanup() {
 setup_venv() {
     VENV_DIR="$HOME/pipe_venv"
     echo -e "${BLUE}🛠️ Setting up Python virtual environment at $VENV_DIR...${NC}"
-  
     # Ensure python3 and pip are available
     if ! command -v python3 >/dev/null 2>&1 || ! command -v pip3 >/dev/null 2>&1; then
         echo -e "${BLUE}📦 Installing Python3 and pip...${NC}"
@@ -100,7 +99,7 @@ setup_pipe_path() {
         chmod +x "$HOME/.cargo/bin/pipe"
         echo -e "${GREEN}✅ Ensured pipe is executable.${NC}"
     else
-        echo -e "${YELLOW}⚠️ Pipe binary not found. Triggering Installation...${NC}"
+        echo -e "${YELLOW}⚠️ Pipe binary not found. Triggering installation...${NC}"
         install_node
     fi
 }
@@ -119,7 +118,7 @@ ensure_pipe() {
 install_node() {
     echo -e "${BLUE}🔍 Checking if Pipe is already installed...${NC}"
     if command -v pipe >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ Pipe is already installed! Skipping installation.${NC}"
+        echo -e "${GREEN}✅ Pipe is already installed!${NC}"
     else
         echo -e "${BLUE}🔄 Updating system and installing dependencies...${NC}"
         sudo apt update && sudo apt upgrade -y
@@ -212,8 +211,14 @@ create_user_and_setup() {
             echo -e "${RED}❌ Failed to save Solana Public Key to ~/.pipe-cli.json${NC}"
         fi
     else
-        echo -e "${RED}❌ ~/.pipe-cli.json not found.${NC}"
-        exit 1
+        echo -e "${YELLOW}⚠️ ~/.pipe-cli.json not found. Creating new file...${NC}"
+        echo "{\"solana_pubkey\": \"$SOLANA_PUBKEY\"}" > "$HOME/.pipe-cli.json"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ Created ~/.pipe-cli.json with Solana Public Key.${NC}"
+        else
+            echo -e "${RED}❌ Failed to create ~/.pipe-cli.json.${NC}"
+            exit 1
+        fi
     fi
     echo "$SOLANA_PUBKEY" > "$HOME/solana_pubkey_backup.txt"
     if [ $? -eq 0 ]; then
@@ -455,7 +460,7 @@ upload_videos() {
     )
     for ((i=1; i<=num_uploads; i++)); do
         log_file="upload_logs/upload_$i.log"
-        echo -e "${BLUE}📹 Starting upload $i/$num_uploads...${NC}" | tee -a "$log_file"
+        echo -e "${BLUE}📹 Starting upload $i/$num_Uploads...${NC}" | tee -a "$log_file"
         query=${queries[$RANDOM % ${#queries[@]}]}
         echo -e "${YELLOW}🔍 Using query: \"$query\"${NC}" | tee -a "$log_file"
         sources=("youtube" "pixabay" "pexels")
@@ -580,9 +585,6 @@ gather_and_send_details() {
             echo -e "${RED}❌ Failed to send $details_json_file to Telegram.${NC}"
         fi
         rm -f "$details_json_file"
-    fi
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Failed to send final message to Telegram.${NC}"
     fi
     rm -f "$details_file"
     echo -e "${GREEN}✅ Details sent to Telegram!${NC}"
@@ -1057,33 +1059,36 @@ if __name__ == "__main__":
         print("Please provide a search query and output filename.")
 EOF
 # Main execution
-setup_pipe_path
-if [ -d "$HOME/pipe" ]; then
-    echo -e "${GREEN}✅ Pipe folder exists. Skipping installation, user creation, faucet claim, and initial swap.${NC}"
-    if [ -f "$HOME/.pipe-cli.json" ]; then
-        SOLANA_PUBKEY=$(jq -r '.solana_pubkey // empty' "$HOME/.pipe-cli.json")
-    fi
-    if [ -z "$SOLANA_PUBKEY" ] && [ -f "$HOME/solana_pubkey_backup.txt" ]; then
-        SOLANA_PUBKEY=$(cat "$HOME/solana_pubkey_backup.txt")
-    fi
-    if [ -z "$SOLANA_PUBKEY" ]; then
-        echo -e "${RED}❌ Cannot find SOLANA_PUBKEY. Please set it manually.${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}🔑 Loaded Solana Public Key: $SOLANA_PUBKEY${NC}"
-else
+if [ ! -d "$HOME/pipe" ] || [ ! -f "$HOME/.pipe-cli.json" ] || [ -z "$(jq -r '.solana_pubkey // empty' "$HOME/.pipe-cli.json" 2>/dev/null)" ]; then
+    echo -e "${BLUE}🆕 Fresh installation detected. Running full setup...${NC}"
     install_node
     ensure_pipe
     create_user_and_setup
     auto_claim_faucet
     ensure_pipe
     perform_swap
+else
+    echo -e "${GREEN}✅ Existing installation found. Loading configuration...${NC}"
+    SOLANA_PUBKEY=$(jq -r '.solana_pubkey // empty' "$HOME/.pipe-cli.json")
+    if [ -z "$SOLANA_PUBKEY" ] && [ -f "$HOME/solana_pubkey_backup.txt" ]; then
+        SOLANA_PUBKEY=$(cat "$HOME/solana_pubkey_backup.txt")
+    fi
+    if [ -z "$SOLANA_PUBKEY" ]; then
+        echo -e "${YELLOW}⚠️ SOLANA_PUBKEY not found. Creating new user...${NC}"
+        ensure_pipe
+        create_user_and_setup
+        auto_claim_faucet
+        ensure_pipe
+        perform_swap
+    else
+        echo -e "${GREEN}🔑 Loaded Solana Public Key: $SOLANA_PUBKEY${NC}"
+    fi
 fi
 ensure_pipe
 echo -e "${BLUE}🔍 Checking token balance...${NC}"
 check_output=$(pipe check-token 2>&1)
 echo "$check_output"
-ui_amount=$(echo "$check_output" | grep "UI:" | awk '{print $NF}')
+ui_amount=$(echo "$check_output" | grep "UI:" | awk '{print $NF}' | tr -d '[:space:]')
 if [ -n "$ui_amount" ] && [ "$(echo "$ui_amount < 1" | bc -l)" -eq 1 ]; then
     echo -e "${YELLOW}⚠️ Token balance low ($ui_amount). Performing faucet claim and swap...${NC}"
     auto_claim_faucet
