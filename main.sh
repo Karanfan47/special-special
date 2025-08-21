@@ -184,6 +184,7 @@ install_node() {
 # Create user and setup referral
 create_user_and_setup() {
     read -r -p "👤 Enter your desired username: " username
+    username=$(echo "$username" | xargs)
     if [ -z "$username" ]; then
         echo -e "${RED}❌ Username cannot be empty. Exiting.${NC}"
         exit 1
