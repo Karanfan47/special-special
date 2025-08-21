@@ -100,8 +100,8 @@ setup_pipe_path() {
         chmod +x "$HOME/.cargo/bin/pipe"
         echo -e "${GREEN}✅ Ensured pipe is executable.${NC}"
     else
-        echo -e "${YELLOW}⚠️ Pipe binary not found. Installation may be incomplete.${NC}"
-        exit 1
+        echo -e "${YELLOW}⚠️ Pipe binary not found. Triggering Installation...${NC}"
+        install_node
     fi
 }
 # Ensure pipe command is available
