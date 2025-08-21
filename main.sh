@@ -353,7 +353,7 @@ upload_videos() {
     echo "pexels: iur1f5KGwvSIR1xr8I1t3KR3NP88wFXeCyV12ibHnioNXQYTy95KhE69" > "$HOME/.pexels_api_key"
     echo "51848865-07253475f9fc0309b02c38a39" > "$HOME/.pixabay_api_key"
     num_uploads=1
-    echo -e "${GREEN}📦 Number of uploads set to: $num_uploads (≈20GB)${NC}"
+    echo -e "${GREEN}📦 Number of uploads set to: $num_uploads ${NC}"
     mkdir -p upload_logs
     queries=(
         "random full hd"
