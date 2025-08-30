@@ -438,7 +438,13 @@ def concatenate_with_moviepy(files, output_file):
     except Exception as e:
         print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
-def download_videos(query, output_file, target_size_mb=1000, max_filesize=1100*1024*1024, min_filesize=50*1024*1024):
+def download_videos(query, output_file,
+                    target_size_mb=5000,
+                    min_target_size_mb=3000,
+                    max_filesize=1100*1024*1024,
+                    min_filesize=50*1024*1024,
+                    max_retries=5):
+
     ydl_opts = {
         'format': 'best',
         'noplaylist': True,
@@ -446,81 +452,107 @@ def download_videos(query, output_file, target_size_mb=1000, max_filesize=1100*1
         'progress_hooks': [progress_hook],
         'outtmpl': '%(title)s.%(ext)s'
     }
+
     total_downloaded = 0
     total_size = 0
     start_time = time.time()
     downloaded_files = []
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"ytsearch20:{query}", download=False)
-            videos = info.get("entries", [])
-            candidates = []
-            for v in videos:
-                size = v.get("filesize") or v.get("filesize_approx")
-                if size and min_filesize <= size <= max_filesize:
-                    candidates.append((size, v))
-            if not candidates:
-                print("❌ No suitable videos found (at least 50MB and up to ~1GB).")
-                return
-            for size, v in sorted(candidates, key=lambda x: -x[0]):
-                if total_size + size <= target_size_mb * 1024 * 1024:
-                    total_size += size
-                    current_file = len(downloaded_files) + 1
-                    print(f"🎬 Downloading video {current_file}: {v['title']} ({format_size(size)})")
-                    ydl.download([v['webpage_url']])
-                    filename = ydl.prepare_filename(v)
-                    if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                        downloaded_files.append(filename)
-                        total_downloaded += size
-                    else:
-                        print(f"❌ Failed to download or empty file: {filename}")
-                        continue
-                    elapsed = time.time() - start_time
-                    speed = total_downloaded / (1024*1024*elapsed) if elapsed > 0 else 0
-                    eta = (total_size - total_downloaded) / (speed * 1024*1024) if speed > 0 else 0
-                    print(f"✅ Overall Progress: {draw_progress_bar(total_downloaded, total_size)} "
-                          f"({format_size(total_downloaded)}/{format_size(total_size)}) "
-                          f"(Speed: {speed:.2f} MB/s ETA: {format_time(eta)})")
-        if not downloaded_files:
-            print("❌ No videos found close to 1GB.")
-            return
-        if len(downloaded_files) == 1:
-            os.rename(downloaded_files[0], output_file)
-        else:
-            success = False
-            if check_ffmpeg():
-                print("🔗 Concatenating videos with ffmpeg...")
-                with open('list.txt', 'w') as f:
-                    for fn in downloaded_files:
-                        f.write(f"file '{fn}'\n")
-                result = subprocess.run(['ffmpeg', '-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', output_file], capture_output=True, text=True)
-                if result.returncode == 0 and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-                    success = True
-                else:
-                    print(f"❌ ffmpeg concatenation failed: {result.stderr}")
-                if os.path.exists('list.txt'):
-                    os.remove('list.txt')
-            if not success:
-                print("🔗 Falling back to moviepy for concatenation...")
-                success = concatenate_with_moviepy(downloaded_files, output_file)
-            if not success:
-                print("❌ Concatenation failed. Using first video only.")
-                os.rename(downloaded_files[0], output_file)
-                downloaded_files = downloaded_files[1:]
-            for fn in downloaded_files:
-                if os.path.exists(fn):
-                    os.remove(fn)
-        if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-            print(f"✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})")
-        else:
-            print("❌ Failed to create final video file.")
-    except Exception as e:
-        print(f"❌ An error occurred: {str(e)}")
+
+    attempt = 0
+    while attempt < max_retries and total_size < target_size_mb * 1024 * 1024:
+        attempt += 1
+        print(f"\n🔄 Attempt {attempt}/{max_retries} to reach target {target_size_mb/1024:.1f} GB")
+
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # offset हर attempt में बदलता रहेगा
+                search_offset = random.randint(0, 50) * attempt
+                info = ydl.extract_info(f"ytsearch20{search_offset}:{query}", download=False)
+                videos = info.get("entries", [])
+                candidates = []
+                for v in videos:
+                    size = v.get("filesize") or v.get("filesize_approx")
+                    if size and min_filesize <= size <= max_filesize:
+                        candidates.append((size, v))
+
+                if not candidates:
+                    print("❌ No suitable videos found (50MB–1GB).")
+                    continue
+
+                for size, v in sorted(candidates, key=lambda x: -x[0]):
+                    if total_size + size <= target_size_mb * 1024 * 1024:
+                        total_size += size
+                        current_file = len(downloaded_files) + 1
+                        print(f"🎬 Downloading video {current_file}: {v['title']} ({format_size(size)})")
+                        ydl.download([v['webpage_url']])
+                        filename = ydl.prepare_filename(v)
+
+                        if os.path.exists(filename) and os.path.getsize(filename) > 0:
+                            downloaded_files.append(filename)
+                            total_downloaded += size
+                        else:
+                            print(f"❌ Failed to download or empty file: {filename}")
+                            continue
+
+                        elapsed = time.time() - start_time
+                        speed = total_downloaded / (1024*1024*elapsed) if elapsed > 0 else 0
+                        eta = ((target_size_mb*1024*1024) - total_downloaded) / (speed * 1024*1024) if speed > 0 else 0
+                        print(f"✅ Overall Progress: {draw_progress_bar(total_downloaded, target_size_mb*1024*1024)} "
+                              f"({format_size(total_downloaded)}/{format_size(target_size_mb*1024*1024)}) "
+                              f"(Speed: {speed:.2f} MB/s ETA: {format_time(eta)})")
+
+        except Exception as e:
+            print(f"❌ Error on attempt {attempt}: {str(e)}")
+
+    # Final decision
+    if total_size < min_target_size_mb * 1024 * 1024:
+        print(f"⚠️ Could not reach minimum {min_target_size_mb/1024:.1f} GB after {max_retries} attempts. "
+              f"Got only {format_size(total_size)}. Falling back to 1GB mode.")
+        # cleanup
         for fn in downloaded_files:
             if os.path.exists(fn):
                 os.remove(fn)
-        if os.path.exists('list.txt'):
-            os.remove('list.txt')
+        return download_videos(query, output_file, target_size_mb=1000,
+                               min_filesize=min_filesize, max_filesize=max_filesize)
+
+    # --- Concatenate & finalize ---
+    if not downloaded_files:
+        print("❌ No videos to combine.")
+        return
+
+    if len(downloaded_files) == 1:
+        os.rename(downloaded_files[0], output_file)
+    else:
+        success = False
+        if check_ffmpeg():
+            print("🔗 Concatenating videos with ffmpeg...")
+            with open('list.txt', 'w') as f:
+                for fn in downloaded_files:
+                    f.write(f"file '{fn}'\n")
+            result = subprocess.run(['ffmpeg', '-f', 'concat', '-safe', '0',
+                                     '-i', 'list.txt', '-c', 'copy', output_file],
+                                     capture_output=True, text=True)
+            if result.returncode == 0 and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                success = True
+            else:
+                print(f"❌ ffmpeg concatenation failed: {result.stderr}")
+            if os.path.exists('list.txt'):
+                os.remove('list.txt')
+        if not success:
+            print("🔗 Falling back to moviepy for concatenation...")
+            success = concatenate_with_moviepy(downloaded_files, output_file)
+        if not success:
+            print("❌ Concatenation failed. Using first video only.")
+            os.rename(downloaded_files[0], output_file)
+            downloaded_files = downloaded_files[1:]
+        for fn in downloaded_files:
+            if os.path.exists(fn):
+                os.remove(fn)
+
+    if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+        print(f"✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})")
+    else:
+        print("❌ Failed to create final video file.")
 def progress_hook(d):
     if d['status'] == 'downloading':
         downloaded = d.get('downloaded_bytes', 0)
