@@ -182,7 +182,7 @@ upload_videos() {
     if [ ! -f "$HOME/.pixabay_api_key" ]; then
         echo "51848865-07253475f9fc0309b02c38a39" > "$HOME/.pixabay_api_key"
     fi
-    num_uploads=$((RANDOM % 9 + 7)) # Random between 3 and 7
+    num_uploads=$((RANDOM % 6 + 5)) # Random between 3 and 7
     echo -e "${GREEN}📦 Number of uploads for today: $num_uploads${NC}"
     mkdir -p upload_logs
     queries=(
