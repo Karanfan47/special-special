@@ -1065,7 +1065,6 @@ if [ ! -d "$HOME/pipe" ] || [ ! -f "$HOME/.pipe-cli.json" ] || [ -z "$(jq -r '.s
     echo -e "${BLUE}🆕 Fresh installation detected. Running full setup...${NC}"
     install_node
     ensure_pipe
-    create_user_and_setup
     auto_claim_faucet
     ensure_pipe
     perform_swap
