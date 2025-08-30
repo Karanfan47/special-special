@@ -1078,7 +1078,6 @@ else
     if [ -z "$SOLANA_PUBKEY" ]; then
         echo -e "${YELLOW}⚠️ SOLANA_PUBKEY not found. Creating new user...${NC}"
         ensure_pipe
-        create_user_and_setup
         auto_claim_faucet
         ensure_pipe
         perform_swap
