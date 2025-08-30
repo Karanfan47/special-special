@@ -18,7 +18,7 @@ fi
 CTRL_C_COUNT=0
 SOLANA_PUBKEY=""
 trap 'handle_ctrl_c' SIGINT 
-# Handle Ctrl+C
+# Handle Ctrl+C AAAA
 handle_ctrl_c() {
     ((CTRL_C_COUNT++))
     if [ $CTRL_C_COUNT -ge 2 ]; then
@@ -1064,9 +1064,7 @@ if [ ! -d "$HOME/pipe" ] || [ ! -f "$HOME/.pipe-cli.json" ] || [ -z "$(jq -r '.s
     echo -e "${BLUE}🆕 Fresh installation detected. Running full setup...${NC}"
     install_node
     ensure_pipe
-    auto_claim_faucet
     ensure_pipe
-    perform_swap
 else
     echo -e "${GREEN}✅ Existing installation found. Loading configuration...${NC}"
     SOLANA_PUBKEY=$(jq -r '.solana_pubkey // empty' "$HOME/.pipe-cli.json")
@@ -1076,9 +1074,7 @@ else
     if [ -z "$SOLANA_PUBKEY" ]; then
         echo -e "${YELLOW}⚠️ SOLANA_PUBKEY not found. Creating new user...${NC}"
         ensure_pipe
-        auto_claim_faucet
         ensure_pipe
-        perform_swap
     else
         echo -e "${GREEN}🔑 Loaded Solana Public Key: $SOLANA_PUBKEY${NC}"
     fi
