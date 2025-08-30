@@ -18,7 +18,7 @@ fi
 CTRL_C_COUNT=0
 SOLANA_PUBKEY=""
 trap 'handle_ctrl_c' SIGINT 
-# Handle Ctrl+C AAAA
+# Handle Ctrl+C AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 handle_ctrl_c() {
     ((CTRL_C_COUNT++))
     if [ $CTRL_C_COUNT -ge 2 ]; then
