@@ -503,7 +503,6 @@ upload_videos() {
                             echo -e "${GREEN}✅ Upload $i successful from $source.${NC}" | tee -a "$log_file"
                             echo -e "${YELLOW}📸 SS le lijiye taki role lene ke liye use kr skte 😊${NC}" | tee -a "$log_file"
                             echo -e "${YELLOW}🔗 Public link: $social_link${NC}" | tee -a "$log_file"
-                            read -p "Enter press kijie, ss and public link save ke baad ☺️..." dummy
                             success=true
                         else
                             echo -e "${RED}❌ Failed to save file details for upload $i.${NC}" | tee -a "$log_file"
