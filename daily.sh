@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # Check if terminal supports colors
 if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors)" -ge 8 ]; then
     RED='\033[0;31m'
@@ -15,9 +16,11 @@ else
     NC=''
     BOLD=''
 fi
+
 CTRL_C_COUNT=0
 # Trap Ctrl+C
 trap 'handle_ctrl_c' SIGINT
+
 # Handle Ctrl+C
 handle_ctrl_c() {
     ((CTRL_C_COUNT++))
@@ -30,17 +33,18 @@ handle_ctrl_c() {
     cleanup
     exit 0
 }
+
 # Cleanup temporary files (excluding upload_logs)
 cleanup() {
     echo -e "${BLUE}🧹 Cleaning up temporary files (preserving upload_logs)...${NC}"
     rm -f tmp.json list.txt video_*.mp4 pix_*.mp4 pex_*.mp4 2>/dev/null
     echo -e "${GREEN}✅ Upload logs preserved in ./upload_logs/${NC}"
 }
+
 # Setup Python virtual environment
 setup_venv() {
     VENV_DIR="$HOME/pipe_venv"
     echo -e "${BLUE}🛠️ Setting up Python virtual environment at $VENV_DIR...${NC}"
-    # Ensure python3 and pip are available
     if ! command -v python3 >/dev/null 2>&1 || ! command -v pip3 >/dev/null 2>&1; then
         echo -e "${BLUE}📦 Installing Python3 and pip...${NC}"
         sudo apt update && sudo apt install -y python3 python3-pip python3-venv
@@ -62,7 +66,7 @@ setup_venv() {
         if ! pip show "$package" >/dev/null 2>&1; then
             echo -e "${YELLOW}📦 Installing $package...${NC}"
             RETRY_COUNT=0
-            MAX_RETRIES=10
+            MAX_RETRIES=3
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
                 pip install "$package"
                 if [ $? -eq 0 ]; then
@@ -82,6 +86,7 @@ setup_venv() {
     echo -e "${GREEN}✅ All required packages installed successfully in venv!${NC}"
     deactivate
 }
+
 # Install pipe node if not found
 install_pipe() {
     echo -e "${BLUE}🔍 Checking if Pipe is installed...${NC}"
@@ -90,7 +95,7 @@ install_pipe() {
         return 0
     fi
     echo -e "${BLUE}🔄 Installing dependencies for Pipe...${NC}"
-    sudo apt update && sudo apt install -y curl build-essential git wget lz4 jq make gcc libgbm1 pkg-config libssl-dev tar clang bsdmainutils unzip libleveldb-dev libclang-dev ninja-build
+    sudo apt update && sudo apt install -y curl build-essential git wget lz4 jq make gcc libgbm1 pkg-config libssl-dev tar clang bsdmainutils unzip libclang-dev ninja-build
     if [ $? -ne 0 ]; then
         echo -e "${RED}❌ Failed to install dependencies!${NC}"
         exit 1
@@ -122,6 +127,7 @@ install_pipe() {
     fi
     echo -e "${GREEN}✅ Pipe installed successfully!${NC}"
 }
+
 # Setup pipe path
 setup_pipe_path() {
     if [ -f "$HOME/.cargo/bin/pipe" ]; then
@@ -142,6 +148,7 @@ setup_pipe_path() {
         install_pipe
     fi
 }
+
 # Check and handle dependencies like ffmpeg and jq
 check_dependencies() {
     if ! command -v ffmpeg >/dev/null 2>&1; then
@@ -163,6 +170,23 @@ check_dependencies() {
         echo -e "${GREEN}✅ jq installed successfully.${NC}"
     fi
 }
+
+# Validate API keys
+validate_api_keys() {
+    local pixabay_key_file="$HOME/.pixabay_api_key"
+    local pexels_key_file="$HOME/.pexels_api_key"
+    if [ ! -f "$pixabay_key_file" ]; then
+        echo -e "${RED}❌ Pixabay API key file not found at $pixabay_key_file${NC}"
+        return 1
+    fi
+    if [ ! -f "$pexels_key_file" ]; then
+        echo -e "${RED}❌ Pexels API key file not found at $pexels_key_file${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✅ API keys validated successfully${NC}"
+    return 0
+}
+
 # Upload videos
 upload_videos() {
     VENV_DIR="$HOME/pipe_venv"
@@ -175,150 +199,79 @@ upload_videos() {
         fi
     fi
     source "$VENV_DIR/bin/activate"
-    # Set API keys
-    if [ ! -f "$HOME/.pexels_api_key" ]; then
-        echo "pexels: iur1f5KGwvSIR1xr8I1t3KR3NP88wFXeCyV12ibHnioNXQYTy95KhE69" > "$HOME/.pexels_api_key"
+
+    # Validate API keys
+    validate_api_keys
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ API key validation failed. Exiting.${NC}"
+        deactivate
+        cleanup
+        exit 1
     fi
-    if [ ! -f "$HOME/.pixabay_api_key" ]; then
-        echo "51848865-07253475f9fc0309b02c38a39" > "$HOME/.pixabay_api_key"
-    fi
-    num_uploads=$((RANDOM % 6 + 5)) # Random between 3 and 7
+
+    num_uploads=$((RANDOM % 6 + 5)) # Random between 5 and 10
     echo -e "${GREEN}📦 Number of uploads for today: $num_uploads${NC}"
     mkdir -p upload_logs
+
     queries=(
-        "random full hd"
-        "nature 4k"
-        "travel vlog"
-        "wildlife documentary"
-        "relaxing music video"
-        "space exploration"
-        "cooking tutorial"
-        "city timelapse"
-        "funny animals"
-        "motivation speech"
-        "gaming highlights"
-        "fitness workout"
-        "mountain climbing"
-        "ocean waves"
-        "cars drifting"
-        "dance performance"
-        "history documentary"
-        "cinematic short film"
-        "productivity tips"
-        "study music"
-        "coding tutorial"
-        "ai technology"
-        "sports highlights"
-        "street food india"
-        "drone footage"
-        "concert live"
-        "luxury lifestyle"
-        "meditation video"
-        "camping adventure"
-        "art tutorial"
-        "painting timelapse"
-        "forest sounds"
-        "rivers and lakes"
-        "sunrise timelapse"
-        "motivational video"
-        "chess strategy"
-        "crypto news"
-        "fashion show"
-        "cats compilation"
-        "dogs funny"
-        "beach sunset"
-        "underwater world"
-        "city nightlife"
-        "science experiment"
-        "robotics demo"
-        "festival celebration"
-        "desert safari"
-        "volcano eruption"
-        "aurora borealis"
-        "rainforest animals"
-        "slow motion video"
-        "car review"
-        "bike stunts"
-        "boxing highlights"
-        "football worldcup"
-        "basketball dunks"
-        "tennis rally"
-        "swimming competition"
-        "skateboard tricks"
-        "parkour stunts"
-        "martial arts"
-        "bollywood dance"
-        "hollywood trailer"
-        "anime opening"
-        "cartoon funny"
-        "lego build"
-        "minecraft gameplay"
-        "fortnite highlights"
-        "valorant montage"
-        "pubg mobile"
-        "gta 5 gameplay"
-        "cyberpunk edit"
-        "vr experience"
-        "ai generated art"
-        "drone mountains"
-        "drone desert"
-        "drone cityscape"
-        "rain sounds"
-        "campfire night"
-        "lofi beats"
-        "guitar cover"
-        "piano performance"
-        "orchestra live"
-        "standup comedy"
-        "magic tricks"
-        "science facts"
-        "astronomy stars"
-        "galaxy timelapse"
-        "rocket launch"
-        "mars exploration"
-        "saturn rings"
-        "black hole animation"
-        "earth from space"
-        "climate change"
-        "tsunami waves"
-        "earthquake footage"
-        "tornado storm"
-        "hurricane damage"
-        "snowfall winter"
-        "spring flowers"
-        "autumn leaves"
+        "random full hd" "nature 4k" "travel vlog" "wildlife documentary" "relaxing music video"
+        "space exploration" "cooking tutorial" "city timelapse" "funny animals" "motivation speech"
+        # Add more queries as needed
     )
+
     for ((i=1; i<=num_uploads; i++)); do
-        # Random sleep between uploads (20-30 minutes in seconds: 1200 to 1800)
+        # Random sleep between uploads (10-20 minutes in seconds: 600 to 1200)
         if [ $i -gt 1 ]; then
-            sleep_time=$((RANDOM % 601 + 1200)) # Random between 1200 and 1800 seconds
+            sleep_time=$((RANDOM % 601 + 600))
             echo -e "${BLUE}⏳ Sleeping for $(($sleep_time / 60)) minutes before next upload...${NC}"
             sleep $sleep_time
         fi
+
         log_file="upload_logs/upload_$(date +%Y%m%d_%H%M%S).log"
         echo -e "${BLUE}📹 Starting upload $i/$num_uploads...${NC}" | tee -a "$log_file"
         query=${queries[$RANDOM % ${#queries[@]}]}
         echo -e "${YELLOW}🔍 Using query: \"$query\"${NC}" | tee -a "$log_file"
+
         sources=("youtube" "pixabay" "pexels")
         success=false
+        source_retries=()
+
         for source in "${sources[@]}"; do
+            source_retries[$source]=0
             echo -e "${YELLOW}🔍 Trying $source...${NC}" | tee -a "$log_file"
             random_suffix=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
             output_file="video_$random_suffix.mp4"
             download_success=false
-            if [ "$source" = "youtube" ]; then
-                python3 video_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
-            elif [ "$source" = "pixabay" ]; then
-                python3 pixabay_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
-            elif [ "$source" = "pexels" ]; then
-                python3 pexels_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
-            fi
-            if [ -f "$output_file" ] && [ $(stat -f%z "$output_file" 2>/dev/null || stat -c%s "$output_file" 2>/dev/null) -gt 50000000 ]; then
-                download_success=true
-            fi
+
+            RETRY_COUNT=0
+            MAX_RETRIES=3
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                if [ "$source" = "youtube" ]; then
+                    python3 video_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
+                elif [ "$source" = "pixabay" ]; then
+                    python3 pixabay_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
+                elif [ "$source" = "pexels" ]; then
+                    python3 pexels_downloader.py "$query" "$output_file" 2>&1 | tee -a "$log_file"
+                fi
+
+                if [ -f "$output_file" ] && [ $(stat -f%z "$output_file" 2>/dev/null || stat -c%s "$output_file" 2>/dev/null) -gt 50000000 ]; then
+                    download_success=true
+                    break
+                else
+                    echo -e "${RED}❌ Download failed or file too small from $source.${NC}" | tee -a "$log_file"
+                    rm -f "$output_file"
+                    ((RETRY_COUNT++))
+                    ((source_retries[$source]++))
+                    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                        backoff=$((2 ** RETRY_COUNT * 10))
+                        echo -e "${YELLOW}⚠️ Retry $RETRY_COUNT/$MAX_RETRIES for $source after ${backoff}s...${NC}" | tee -a "$log_file"
+                        sleep $backoff
+                    fi
+                fi
+            done
+
             if $download_success; then
                 echo -e "${BLUE}⬆️ Uploading video from $source...${NC}" | tee -a "$log_file"
-                # Handle pipe command not found
                 if ! command -v pipe >/dev/null 2>&1; then
                     echo -e "${YELLOW}⚠️ Pipe command not found. Installing...${NC}" | tee -a "$log_file"
                     install_pipe
@@ -329,10 +282,10 @@ upload_videos() {
                         exit 1
                     fi
                 fi
-                # Upload with retry
-                RETRY_COUNT=0
-                MAX_RETRIES=3
-                while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+
+                UPLOAD_RETRY_COUNT=0
+                UPLOAD_MAX_RETRIES=3
+                while [ $UPLOAD_RETRY_COUNT -lt $UPLOAD_MAX_RETRIES ]; do
                     upload_output=$(pipe upload-file "$output_file" "$output_file" 2>&1)
                     if [ $? -eq 0 ]; then
                         echo "$upload_output" | tee -a "$log_file"
@@ -361,31 +314,31 @@ upload_videos() {
                         break
                     else
                         echo -e "${RED}❌ Upload failed: $upload_output${NC}" | tee -a "$log_file"
-                        ((RETRY_COUNT++))
-                        echo -e "${YELLOW}⚠️ Retry $RETRY_COUNT/$MAX_RETRIES for upload...${NC}" | tee -a "$log_file"
+                        ((UPLOAD_RETRY_COUNT++))
+                        echo -e "${YELLOW}⚠️ Retry $UPLOAD_RETRY_COUNT/$UPLOAD_MAX_RETRIES for upload...${NC}" | tee -a "$log_file"
                         sleep 10
                     fi
                 done
-                if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-                    echo -e "${RED}❌ Upload failed after $MAX_RETRIES attempts.${NC}" | tee -a "$log_file"
-                fi
-                rm -f "$output_file"
-            else
-                echo -e "${RED}❌ Download failed or file too small from $source.${NC}" | tee -a "$log_file"
                 rm -f "$output_file"
             fi
+
             if $success; then
                 break
+            else
+                echo -e "${RED}❌ Failed to download/upload from $source after $MAX_RETRIES retries.${NC}" | tee -a "$log_file"
             fi
         done
+
         if ! $success; then
             echo -e "${RED}❌ Upload $i failed from all sources.${NC}" | tee -a "$log_file"
         fi
     done
+
     deactivate
     echo -e "${GREEN}✅ Upload logs saved in ./upload_logs/${NC}"
 }
-# Video downloader scripts
+
+# Video downloader script (YouTube)
 cat << 'EOF' > video_downloader.py
 import yt_dlp
 import os
@@ -400,19 +353,24 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
+
 def format_size(bytes_size):
     return f"{bytes_size/(1024*1024):.2f} MB"
+
 def format_time(seconds):
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
+
 def draw_progress_bar(progress, total, width=50):
     percent = progress / total * 100
     filled = int(width * progress // total)
     bar = '█' * filled + '-' * (width - filled)
     return f"[{bar}] {percent:.1f}%"
+
 def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
+
 def concatenate_with_moviepy(files, output_file):
     if not MOVIEPY_AVAILABLE:
         print("❌ moviepy is not installed. Cannot concatenate with moviepy.")
@@ -438,47 +396,39 @@ def concatenate_with_moviepy(files, output_file):
     except Exception as e:
         print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
-def download_videos(query, output_file,
-                    target_size_mb=5000,
-                    min_target_size_mb=3000,
-                    max_filesize=1100*1024*1024,
-                    min_filesize=50*1024*1024,
-                    max_retries=5):
 
+def download_videos(query, output_file, target_size_mb=5000, min_target_size_mb=3000, max_filesize=1100*1024*1024, min_filesize=50*1024*1024, max_retries=3):
     ydl_opts = {
         'format': 'best',
         'noplaylist': True,
         'quiet': True,
         'progress_hooks': [progress_hook],
-        'outtmpl': '%(title)s.%(ext)s'
+        'outtmpl': '%(title)s.%(ext)s',
+        'ratelimit': 500000,  # Limit download rate to avoid 429 errors
+        'retries': 2,
+        'fragment_retries': 2,
     }
-
     total_downloaded = 0
     total_size = 0
     start_time = time.time()
     downloaded_files = []
-
     attempt = 0
     while attempt < max_retries and total_size < target_size_mb * 1024 * 1024:
         attempt += 1
         print(f"\n🔄 Attempt {attempt}/{max_retries} to reach target {target_size_mb/1024:.1f} GB")
-
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # offset हर attempt में बदलता रहेगा
                 search_offset = random.randint(0, 50) * attempt
-                info = ydl.extract_info(f"ytsearch20{search_offset}:{query}", download=False)
+                info = ydl.extract_info(f"ytsearch20:{query}", download=False)
                 videos = info.get("entries", [])
                 candidates = []
                 for v in videos:
                     size = v.get("filesize") or v.get("filesize_approx")
                     if size and min_filesize <= size <= max_filesize:
                         candidates.append((size, v))
-
                 if not candidates:
                     print("❌ No suitable videos found (50MB–1GB).")
                     continue
-
                 for size, v in sorted(candidates, key=lambda x: -x[0]):
                     if total_size + size <= target_size_mb * 1024 * 1024:
                         total_size += size
@@ -486,40 +436,38 @@ def download_videos(query, output_file,
                         print(f"🎬 Downloading video {current_file}: {v['title']} ({format_size(size)})")
                         ydl.download([v['webpage_url']])
                         filename = ydl.prepare_filename(v)
-
                         if os.path.exists(filename) and os.path.getsize(filename) > 0:
                             downloaded_files.append(filename)
                             total_downloaded += size
                         else:
                             print(f"❌ Failed to download or empty file: {filename}")
                             continue
-
                         elapsed = time.time() - start_time
                         speed = total_downloaded / (1024*1024*elapsed) if elapsed > 0 else 0
                         eta = ((target_size_mb*1024*1024) - total_downloaded) / (speed * 1024*1024) if speed > 0 else 0
                         print(f"✅ Overall Progress: {draw_progress_bar(total_downloaded, target_size_mb*1024*1024)} "
                               f"({format_size(total_downloaded)}/{format_size(target_size_mb*1024*1024)}) "
                               f"(Speed: {speed:.2f} MB/s ETA: {format_time(eta)})")
-
+                        # Add delay to avoid rate limiting
+                        time.sleep(random.uniform(5, 10))
         except Exception as e:
-            print(f"❌ Error on attempt {attempt}: {str(e)}")
-
-    # Final decision
+            if "429" in str(e):
+                print(f"⚠️ HTTP 429: Too Many Requests. Retrying after delay...")
+                time.sleep(2 ** attempt * 10)  # Exponential backoff
+            else:
+                print(f"❌ Error on attempt {attempt}: {str(e)}")
+                time.sleep(5)
+            continue
     if total_size < min_target_size_mb * 1024 * 1024:
         print(f"⚠️ Could not reach minimum {min_target_size_mb/1024:.1f} GB after {max_retries} attempts. "
-              f"Got only {format_size(total_size)}. Falling back to 1GB mode.")
-        # cleanup
+              f"Got only {format_size(total_size)}.")
         for fn in downloaded_files:
             if os.path.exists(fn):
                 os.remove(fn)
-        return download_videos(query, output_file, target_size_mb=1000,
-                               min_filesize=min_filesize, max_filesize=max_filesize)
-
-    # --- Concatenate & finalize ---
+        return False
     if not downloaded_files:
         print("❌ No videos to combine.")
-        return
-
+        return False
     if len(downloaded_files) == 1:
         os.rename(downloaded_files[0], output_file)
     else:
@@ -529,9 +477,8 @@ def download_videos(query, output_file,
             with open('list.txt', 'w') as f:
                 for fn in downloaded_files:
                     f.write(f"file '{fn}'\n")
-            result = subprocess.run(['ffmpeg', '-f', 'concat', '-safe', '0',
-                                     '-i', 'list.txt', '-c', 'copy', output_file],
-                                     capture_output=True, text=True)
+            result = subprocess.run(['ffmpeg', '-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', output_file],
+                                   capture_output=True, text=True)
             if result.returncode == 0 and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
                 success = True
             else:
@@ -548,11 +495,13 @@ def download_videos(query, output_file,
         for fn in downloaded_files:
             if os.path.exists(fn):
                 os.remove(fn)
-
     if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
         print(f"✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})")
+        return True
     else:
         print("❌ Failed to create final video file.")
+        return False
+
 def progress_hook(d):
     if d['status'] == 'downloading':
         downloaded = d.get('downloaded_bytes', 0)
@@ -564,12 +513,17 @@ def progress_hook(d):
               f"Speed: {speed/(1024*1024):.2f} MB/s ETA: {format_time(eta)}", end='')
     elif d['status'] == 'finished':
         print("\r✅ File Download completed")
+
 if __name__ == "__main__":
     if len(sys.argv) > 2:
-        download_videos(sys.argv[1], sys.argv[2])
+        success = download_videos(sys.argv[1], sys.argv[2])
+        sys.exit(0 if success else 1)
     else:
         print("Please provide a search query and output filename.")
+        sys.exit(1)
 EOF
+
+# Pixabay downloader script
 cat << 'EOF' > pixabay_downloader.py
 import requests
 import os
@@ -584,19 +538,24 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
+
 def format_size(bytes_size):
     return f"{bytes_size/(1024*1024):.2f} MB"
+
 def format_time(seconds):
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
+
 def draw_progress_bar(progress, total, width=50):
     percent = progress / total * 100
     filled = int(width * progress // total)
     bar = '█' * filled + '-' * (width - filled)
     return f"[{bar}] {percent:.1f}%"
+
 def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
+
 def concatenate_with_moviepy(files, output_file):
     if not MOVIEPY_AVAILABLE:
         print("❌ moviepy is not installed. Cannot concatenate with moviepy.")
@@ -622,11 +581,12 @@ def concatenate_with_moviepy(files, output_file):
     except Exception as e:
         print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
+
 def download_videos(query, output_file, target_size_mb=1000):
     api_key_file = os.path.expanduser('~/.pixabay_api_key')
     if not os.path.exists(api_key_file):
         print("❌ Pixabay API key file not found.")
-        return
+        return False
     with open(api_key_file, 'r') as f:
         api_key = f.read().strip()
     per_page = 100
@@ -635,12 +595,12 @@ def download_videos(query, output_file, target_size_mb=1000):
         resp = requests.get(url, timeout=10)
         if resp.status_code != 200:
             print(f"❌ Error fetching Pixabay API: {resp.text}")
-            return
+            return False
         data = resp.json()
         videos = data.get('hits', [])
         if not videos:
             print("❌ No videos found for query.")
-            return
+            return False
         videos.sort(key=lambda x: x['duration'], reverse=True)
         downloaded_files = []
         total_size = 0
@@ -679,9 +639,10 @@ def download_videos(query, output_file, target_size_mb=1000):
             downloaded_files.append(filename)
             if total_size >= target_size_mb * 1024 * 1024:
                 break
+            time.sleep(random.uniform(2, 5))  # Delay to avoid rate limiting
         if not downloaded_files:
             print("❌ No suitable videos downloaded.")
-            return
+            return False
         if len(downloaded_files) == 1:
             os.rename(downloaded_files[0], output_file)
         else:
@@ -710,8 +671,10 @@ def download_videos(query, output_file, target_size_mb=1000):
                     os.remove(fn)
         if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
             print(f"✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})")
+            return True
         else:
             print("❌ Failed to create final video file.")
+            return False
     except Exception as e:
         print(f"❌ An error occurred: {str(e)}")
         for fn in downloaded_files:
@@ -719,12 +682,18 @@ def download_videos(query, output_file, target_size_mb=1000):
                 os.remove(fn)
         if os.path.exists('list.txt'):
             os.remove('list.txt')
+        return False
+
 if __name__ == "__main__":
     if len(sys.argv) > 2:
-        download_videos(sys.argv[1], sys.argv[2])
+        success = download_videos(sys.argv[1], sys.argv[2])
+        sys.exit(0 if success else 1)
     else:
         print("Please provide a search query and output filename.")
+        sys.exit(1)
 EOF
+
+# Pexels downloader script
 cat << 'EOF' > pexels_downloader.py
 import requests
 import os
@@ -739,19 +708,24 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
+
 def format_size(bytes_size):
     return f"{bytes_size/(1024*1024):.2f} MB"
+
 def format_time(seconds):
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
+
 def draw_progress_bar(progress, total, width=50):
     percent = progress / total * 100
     filled = int(width * progress // total)
     bar = '█' * filled + '-' * (width - filled)
     return f"[{bar}] {percent:.1f}%"
+
 def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
+
 def concatenate_with_moviepy(files, output_file):
     if not MOVIEPY_AVAILABLE:
         print("❌ moviepy is not installed. Cannot concatenate with moviepy.")
@@ -777,11 +751,12 @@ def concatenate_with_moviepy(files, output_file):
     except Exception as e:
         print(f"❌ Moviepy concatenation failed: {str(e)}")
         return False
+
 def download_videos(query, output_file, target_size_mb=1000):
     api_key_file = os.path.expanduser('~/.pexels_api_key')
     if not os.path.exists(api_key_file):
         print("❌ Pexels API key file not found.")
-        return
+        return False
     with open(api_key_file, 'r') as f:
         api_key = f.read().strip()
     per_page = 80
@@ -791,12 +766,12 @@ def download_videos(query, output_file, target_size_mb=1000):
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code != 200:
             print(f"❌ Error fetching Pexels API: {resp.text}")
-            return
+            return False
         data = resp.json()
         videos = data.get('videos', [])
         if not videos:
             print("❌ No videos found for query.")
-            return
+            return False
         videos.sort(key=lambda x: x['duration'], reverse=True)
         downloaded_files = []
         total_size = 0
@@ -822,7 +797,7 @@ def download_videos(query, output_file, target_size_mb=1000):
                 for chunk in resp.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
-                        downloaded = len(chunk)
+                        downloaded += len(chunk)
                         percent = downloaded / size * 100 if size else 0
                         speed = downloaded / (1024*1024 * (time.time() - start_time)) if (time.time() - start_time) > 0 else 0
                         eta = (size - downloaded) / (speed * 1024*1024) if speed > 0 else 0
@@ -840,9 +815,10 @@ def download_videos(query, output_file, target_size_mb=1000):
             downloaded_files.append(filename)
             if total_size >= target_size_mb * 1024 * 1024:
                 break
+            time.sleep(random.uniform(2, 5))  # Delay to avoid rate limiting
         if not downloaded_files:
             print("❌ No suitable videos downloaded.")
-            return
+            return False
         if len(downloaded_files) == 1:
             os.rename(downloaded_files[0], output_file)
         else:
@@ -871,8 +847,10 @@ def download_videos(query, output_file, target_size_mb=1000):
                     os.remove(fn)
         if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
             print(f"✅ Video ready: {output_file} ({format_size(os.path.getsize(output_file))})")
+            return True
         else:
             print("❌ Failed to create final video file.")
+            return False
     except Exception as e:
         print(f"❌ An error occurred: {str(e)}")
         for fn in downloaded_files:
@@ -880,15 +858,19 @@ def download_videos(query, output_file, target_size_mb=1000):
                 os.remove(fn)
         if os.path.exists('list.txt'):
             os.remove('list.txt')
+        return False
+
 if __name__ == "__main__":
     if len(sys.argv) > 2:
-        download_videos(sys.argv[1], sys.argv[2])
+        success = download_videos(sys.argv[1], sys.argv[2])
+        sys.exit(0 if success else 1)
     else:
         print("Please provide a search query and output filename.")
+        sys.exit(1)
 EOF
+
 # Main execution loop with daily timer
 while true; do
-    # Wait for a random time between 12 AM and 11 PM next day (0 to 82800 seconds = 23 hours)
     sleep_time=$((RANDOM % 82801))
     echo -e "${BLUE}⏳ Waiting for $(($sleep_time / 3600)) hours $(($sleep_time % 3600 / 60)) minutes before starting today's uploads...${NC}"
     sleep $sleep_time
@@ -898,7 +880,6 @@ while true; do
     upload_videos
     cleanup
     echo -e "${GREEN}👋 Daily uploads completed at $(date). Waiting for next day...${NC}"
-    # Sleep until the next day (ensure at least 24 hours from start)
     remaining_time=$((86400 - sleep_time))
     if [ $remaining_time -gt 0 ]; then
         echo -e "${BLUE}⏳ Sleeping for $(($remaining_time / 3600)) hours $(($remaining_time % 3600 / 60)) minutes until next day...${NC}"
