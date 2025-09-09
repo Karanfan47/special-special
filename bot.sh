@@ -47,7 +47,7 @@ BOT_TOKEN = sys.argv[1]
 USER_ID = sys.argv[2]
 VPS_NAME = sys.argv[3]
 
-LOG_FILE = os.path.expanduser("~/bot/node.log")
+LOG_FILE = os.path.expanduser("~/rl-swarm/node.log")
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 def get_updates(offset=None):
