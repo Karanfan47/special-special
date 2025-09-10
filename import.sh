@@ -114,6 +114,41 @@ ensure_pipe() {
         fi
     fi
 }
+
+unzip_pipe_details() {
+    ZIP_FILE=$(find "$HOME" -maxdepth 1 -type f -name "*_details.zip" | head -n 1)
+
+    if [ -n "$ZIP_FILE" ]; then
+        echo "📂 Found ZIP file: $ZIP_FILE, extracting to $HOME ..."
+
+        # Ensure unzip is installed
+        if ! command -v unzip &>/dev/null; then
+            if command -v apt &>/dev/null; then
+                sudo apt update && sudo apt install -y unzip
+            elif command -v yum &>/dev/null; then
+                sudo yum install -y unzip
+            elif command -v apk &>/dev/null; then
+                sudo apk add unzip
+            else
+                echo "❌ Could not install 'unzip' (unknown package manager)."
+                exit 1
+            fi
+        fi
+
+        # Extract directly into $HOME
+        unzip -o "$ZIP_FILE" -d "$HOME" >/dev/null 2>&1
+
+        if ls "$HOME"/*_details.txt >/dev/null 2>&1; then
+            echo "✅ Extracted details file(s) to $HOME:"
+            ls -l "$HOME"/*_details.txt
+        else
+            echo "⚠️ No *_details.txt file found after unzip"
+        fi
+    else
+        echo "⚠️ No *_details.zip found in $HOME"
+    fi
+}
+
 # Install pipe node
 install_node() {
     echo -e "${BLUE}🔍 Checking if Pipe is already installed...${NC}"
